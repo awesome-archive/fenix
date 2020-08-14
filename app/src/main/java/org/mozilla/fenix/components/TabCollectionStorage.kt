@@ -1,11 +1,13 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.components
 
 import android.content.Context
+import android.os.StrictMode
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.asLiveData
 import androidx.paging.DataSource
 import mozilla.components.browser.session.Session
 import mozilla.components.browser.session.SessionManager
@@ -14,9 +16,11 @@ import mozilla.components.feature.tab.collections.TabCollection
 import mozilla.components.feature.tab.collections.TabCollectionStorage
 import mozilla.components.support.base.observer.Observable
 import mozilla.components.support.base.observer.ObserverRegistry
-import org.mozilla.fenix.ext.urlToTrimmedHost
+import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.resetPoliciesAfter
+import org.mozilla.fenix.ext.toShortUrl
 import org.mozilla.fenix.home.sessioncontrol.viewholders.CollectionViewHolder
-import org.mozilla.fenix.test.Mockable
+import org.mozilla.fenix.utils.Mockable
 
 @Mockable
 class TabCollectionStorage(
@@ -48,7 +52,9 @@ class TabCollectionStorage(
     var cachedTabCollections = listOf<TabCollection>()
 
     private val collectionStorage by lazy {
-        TabCollectionStorage(context, sessionManager)
+        StrictMode.allowThreadDiskReads().resetPoliciesAfter {
+            TabCollectionStorage(context, sessionManager)
+        }
     }
 
     fun createCollection(title: String, sessions: List<Session>) {
@@ -66,7 +72,7 @@ class TabCollectionStorage(
     }
 
     fun getCollections(limit: Int = 20): LiveData<List<TabCollection>> {
-        return collectionStorage.getCollections(limit)
+        return collectionStorage.getCollections(limit).asLiveData()
     }
 
     fun getCollectionsPaged(): DataSource.Factory<Int, TabCollection> {
@@ -78,11 +84,7 @@ class TabCollectionStorage(
     }
 
     fun removeTabFromCollection(tabCollection: TabCollection, tab: Tab) {
-        if (tabCollection.tabs.size == 1) {
-            removeCollection(tabCollection)
-        } else {
-            collectionStorage.removeTabFromCollection(tabCollection, tab)
-        }
+        collectionStorage.removeTabFromCollection(tabCollection, tab)
     }
 
     fun renameCollection(tabCollection: TabCollection, title: String) {
@@ -93,7 +95,7 @@ class TabCollectionStorage(
 
 fun TabCollection.description(context: Context): String {
     return this.tabs
-        .map { it.url.urlToTrimmedHost(context).capitalize() }
+        .map { it.url.toShortUrl(context.components.publicSuffixList) }
         .map {
             if (it.length > CollectionViewHolder.maxTitleLength) {
                 it.substring(
@@ -103,5 +105,7 @@ fun TabCollection.description(context: Context): String {
             } else {
                 it
             }
-        }.joinToString(", ")
+        }
+        .distinct()
+        .joinToString(", ")
 }

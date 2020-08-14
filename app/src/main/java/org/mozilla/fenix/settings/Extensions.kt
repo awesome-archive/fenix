@@ -4,125 +4,69 @@
 
 package org.mozilla.fenix.settings
 
-import android.content.Context
-import android.view.View
 import android.widget.RadioButton
-import android.widget.TextView
-import androidx.core.content.ContextCompat
-import androidx.core.text.HtmlCompat
+import androidx.annotation.StringRes
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.preference.Preference
+import androidx.preference.PreferenceFragmentCompat
 import mozilla.components.feature.sitepermissions.SitePermissions
-import mozilla.components.feature.sitepermissions.SitePermissionsRules
-import org.mozilla.fenix.R
-import org.mozilla.fenix.ThemeManager
-
-internal fun SitePermissionsRules.Action.toString(context: Context): String {
-    return when (this) {
-        SitePermissionsRules.Action.ASK_TO_ALLOW -> {
-            context.getString(R.string.preference_option_phone_feature_ask_to_allow)
-        }
-        SitePermissionsRules.Action.BLOCKED -> {
-            context.getString(R.string.preference_option_phone_feature_blocked)
-        }
-    }
-}
-
-internal fun SitePermissions.Status.toString(context: Context): String {
-    return when (this) {
-        SitePermissions.Status.BLOCKED -> {
-            context.getString(R.string.preference_option_phone_feature_blocked)
-        }
-        SitePermissions.Status.NO_DECISION -> {
-            context.getString(R.string.preference_option_phone_feature_ask_to_allow)
-        }
-        SitePermissions.Status.ALLOWED -> {
-            context.getString(R.string.preference_option_phone_feature_allowed)
-        }
-    }
-}
-
-fun SitePermissionsRules.Action.toStatus(): SitePermissions.Status {
-    return when (this) {
-        SitePermissionsRules.Action.BLOCKED -> SitePermissions.Status.BLOCKED
-        SitePermissionsRules.Action.ASK_TO_ALLOW -> SitePermissions.Status.NO_DECISION
-    }
-}
-
-fun SitePermissions.Status.toggle(): SitePermissions.Status {
-    return when (this) {
-        SitePermissions.Status.BLOCKED -> SitePermissions.Status.ALLOWED
-        SitePermissions.Status.NO_DECISION -> SitePermissions.Status.ALLOWED
-        SitePermissions.Status.ALLOWED -> SitePermissions.Status.BLOCKED
-    }
-}
+import mozilla.components.support.ktx.android.content.res.resolveAttribute
+import mozilla.components.support.ktx.android.view.putCompoundDrawablesRelative
+import org.mozilla.fenix.ext.getPreferenceKey
 
 fun SitePermissions.toggle(featurePhone: PhoneFeature): SitePermissions {
-    return when (featurePhone) {
-        PhoneFeature.CAMERA -> {
-            copy(
-                camera = camera.toggle()
-            )
-        }
-        PhoneFeature.LOCATION -> {
-            copy(
-                location = location.toggle()
-            )
-        }
-        PhoneFeature.MICROPHONE -> {
-            copy(
-                microphone = microphone.toggle()
-            )
-        }
-        PhoneFeature.NOTIFICATION -> {
-            copy(
-                notification = notification.toggle()
-            )
-        }
-    }
+    return update(featurePhone, get(featurePhone).toggle())
 }
 
-fun PhoneFeature.getLabel(context: Context): String {
-    return when (this) {
-        PhoneFeature.CAMERA -> context.getString(R.string.preference_phone_feature_camera)
-        PhoneFeature.LOCATION -> context.getString(R.string.preference_phone_feature_location)
-        PhoneFeature.MICROPHONE -> context.getString(R.string.preference_phone_feature_microphone)
-        PhoneFeature.NOTIFICATION -> context.getString(R.string.preference_phone_feature_notification)
-    }
+fun SitePermissions.get(field: PhoneFeature) = when (field) {
+    PhoneFeature.CAMERA -> camera
+    PhoneFeature.LOCATION -> location
+    PhoneFeature.MICROPHONE -> microphone
+    PhoneFeature.NOTIFICATION -> notification
+    PhoneFeature.AUTOPLAY_AUDIBLE -> autoplayAudible
+    PhoneFeature.AUTOPLAY_INAUDIBLE -> autoplayInaudible
 }
 
-fun PhoneFeature.getPreferenceKey(context: Context): String {
-    return when (this) {
-        PhoneFeature.CAMERA -> context.getString(R.string.pref_key_phone_feature_camera)
-        PhoneFeature.LOCATION -> context.getString(R.string.pref_key_phone_feature_location)
-        PhoneFeature.MICROPHONE -> context.getString(R.string.pref_key_phone_feature_microphone)
-        PhoneFeature.NOTIFICATION -> context.getString(R.string.pref_key_phone_feature_notification)
-    }
+fun SitePermissions.update(field: PhoneFeature, value: SitePermissions.Status) = when (field) {
+    PhoneFeature.CAMERA -> copy(camera = value)
+    PhoneFeature.LOCATION -> copy(location = value)
+    PhoneFeature.MICROPHONE -> copy(microphone = value)
+    PhoneFeature.NOTIFICATION -> copy(notification = value)
+    PhoneFeature.AUTOPLAY_AUDIBLE -> copy(autoplayAudible = value)
+    PhoneFeature.AUTOPLAY_INAUDIBLE -> copy(autoplayInaudible = value)
 }
 
-/* In devices with Android 6, when we use android:button="@null" android:drawableStart doesn't work via xml
-* as a result we have to apply it programmatically. More info about this issue https://github.com/mozilla-mobile/fenix/issues/1414
-*/
+/**
+ * In devices with Android 6, when we use android:button="@null" android:drawableStart doesn't work via xml
+ * as a result we have to apply it programmatically. More info about this issue https://github.com/mozilla-mobile/fenix/issues/1414
+ */
 fun RadioButton.setStartCheckedIndicator() {
-    val attr =
-        ThemeManager.resolveAttribute(android.R.attr.listChoiceIndicatorSingle, context)
-    val buttonDrawable = ContextCompat.getDrawable(context, attr)
-    buttonDrawable.apply {
-        this?.setBounds(0, 0, this.intrinsicWidth, this.intrinsicHeight)
+    val attr = context.theme.resolveAttribute(android.R.attr.listChoiceIndicatorSingle)
+    val buttonDrawable = AppCompatResources.getDrawable(context, attr)
+    buttonDrawable?.apply {
+        setBounds(0, 0, intrinsicWidth, intrinsicHeight)
     }
-    this.setCompoundDrawables(buttonDrawable, null, null, null)
+    putCompoundDrawablesRelative(start = buttonDrawable)
 }
 
-fun initBlockedByAndroidView(phoneFeature: PhoneFeature, blockedByAndroidView: View) {
-    val context = blockedByAndroidView.context
-    if (!phoneFeature.isAndroidPermissionGranted(context)) {
-        blockedByAndroidView.visibility = View.VISIBLE
-
-        val descriptionLabel = blockedByAndroidView.findViewById<TextView>(R.id.blocked_by_android_explanation_label)
-        val text = context.getString(
-            R.string.phone_feature_blocked_by_android_explanation,
-            phoneFeature.getLabel(context)
-        )
-        descriptionLabel.text = HtmlCompat.fromHtml(text, HtmlCompat.FROM_HTML_MODE_COMPACT)
-    } else {
-        blockedByAndroidView.visibility = View.GONE
+/**
+ * Sets the callback to be invoked when this preference is changed by the user (but before
+ * the internal state has been updated). Allows the type of the preference to be specified.
+ * If the new value doesn't match the preference type the listener isn't called.
+ *
+ * @param onPreferenceChangeListener The callback to be invoked
+ */
+inline fun <reified T> Preference.setOnPreferenceChangeListener(
+    crossinline onPreferenceChangeListener: (Preference, T) -> Boolean
+) {
+    setOnPreferenceChangeListener { preference: Preference, newValue: Any ->
+        (newValue as? T)?.let { onPreferenceChangeListener(preference, it) } ?: false
     }
 }
+
+/**
+ * Find a preference with the corresponding key and throw if it does not exist.
+ * @param preferenceId Resource ID from preference_keys
+ */
+fun <T : Preference> PreferenceFragmentCompat.requirePreference(@StringRes preferenceId: Int) =
+    requireNotNull(findPreference<T>(getPreferenceKey(preferenceId)))

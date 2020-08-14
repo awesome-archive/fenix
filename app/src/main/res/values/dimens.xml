@@ -2,15 +2,17 @@
 <!-- This Source Code Form is subject to the terms of the Mozilla Public
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <dimen name="crash_reporter_close_tab_button_horizontal_margin">26dp</dimen>
     <dimen name="crash_reporter_close_tab_button_bottom_margin">24dp</dimen>
     <dimen name="glyph_button_height">48dp</dimen>
     <dimen name="glyph_button_width">48dp</dimen>
-    <dimen name="mozac_browser_menu_corner_radius">14dp</dimen>
+    <dimen name="mozac_browser_menu_width_min" tools:ignore="UnusedResources">112dp</dimen>
+    <dimen name="mozac_browser_menu_width_max" tools:ignore="UnusedResources">314dp</dimen>
+    <dimen name="mozac_browser_menu_corner_radius">8dp</dimen>
+    <dimen name="mozac_browser_menu2_corner_radius">8dp</dimen>
     <dimen name="toolbar_elevation">7dp</dimen>
     <dimen name="library_item_height">56dp</dimen>
-    <dimen name="library_item_icon_height">48dp</dimen>
     <dimen name="library_item_icon_margin_horizontal">16dp</dimen>
     <dimen name="library_item_icon_margin_vertical">8dp</dimen>
     <dimen name="history_favicon_width_height">40dp</dimen>
@@ -18,29 +20,156 @@
     <dimen name="tab_border_width">2dp</dimen>
     <dimen name="tab_corner_radius">8dp</dimen>
     <dimen name="preference_icon_drawable_size">24dp</dimen>
+    <dimen name="search_bar_search_engine_icon_padding">12dp</dimen>
+    <dimen name="search_bar_search_icon_margin">28dp</dimen>
     <dimen name="search_engine_radio_button_height">48dp</dimen>
+    <dimen name="search_engine_engine_icon_height">24dp</dimen>
     <dimen name="radio_button_drawable_padding">32dp</dimen>
     <dimen name="radio_button_padding_horizontal">16dp</dimen>
     <dimen name="radio_button_padding_vertical">12dp</dimen>
     <dimen name="radio_button_preference_height">48dp</dimen>
     <dimen name="radio_button_preference_horizontal">16dp</dimen>
-    <dimen name="radio_button_preference_drawable_padding">16dp</dimen>
+    <dimen name="radio_button_preference_drawable_padding">24dp</dimen>
     <dimen name="radio_button_preference_vertical">12dp</dimen>
     <dimen name="phone_feature_label_recommended_text_size">14sp</dimen>
     <dimen name="site_permissions_exceptions_item_text_size">18sp</dimen>
     <dimen name="site_permissions_exceptions_item_height">56dp</dimen>
+    <dimen name="synced_tab_item_min_height">56dp</dimen>
     <dimen name="component_collection_creation_list_margin">16dp</dimen>
+    <dimen name="exceptions_description_margin">12dp</dimen>
+    <dimen name="preference_seek_bar_padding">16dp</dimen>
+    <dimen name="custom_checkbox_alignment_margin">68dp</dimen>
+
+    <dimen name="context_menu_height">48dp</dimen>
+    <dimen name="context_menu_x_offset">8dp</dimen>
+    <dimen name="tp_onboarding_width">256dp</dimen>
+    <!-- Dimensions for the CFR (Contextual Feature Recommendation) tooltip triangle. -->
+    <dimen name="cfr_triangle_height">16dp</dimen>
+    <dimen name="cfr_triangle_width">16dp</dimen>
+    <dimen name="cfr_triangle_margin_edge">16dp</dimen>
+
+    <dimen name="tab_counter_box_width_height">24dp</dimen>
+
+    <!--Preferences-->
+    <dimen name="checkbox_preference_padding_vertical">12dp</dimen>
+    <dimen name="radiobutton_preference_margin_start">8dp</dimen>
+    <dimen name="top_bar_alignment_margin_start">72dp</dimen>
 
     <!--Quick Settings-->
-    <dimen name="quicksettings_item_height">46dp</dimen>
+    <dimen name="quicksettings_item_height">28dp</dimen>
+    <dimen name="tracking_protection_item_height">48dp</dimen>
+    <dimen name="tracking_protection_item_margin_end">16dp</dimen>
+    <dimen name="tracking_protection_item_margin_bottom">18dp</dimen>
+
+    <dimen name="design_quick_action_sheet_peek_height_min">64dp</dimen>
 
     <dimen name="onboarding_header_icon_height_width">32dp</dimen>
 
     <!-- Bottom Sheet Fragment card -->
-    <dimen name="bottom_sheet_corner_radius">16dp</dimen>
+    <dimen name="bottom_sheet_corner_radius">8dp</dimen>
     <dimen name="bottom_sheet_top_padding">8dp</dimen>
 
     <!-- Browser Toolbar -->
     <dimen name="browser_toolbar_height">56dp</dimen>
-    <dimen name="toolbar_and_qab_height">67dp</dimen>
+
+    <!-- SignIn Component -->
+    <dimen name="sign_in_button_padding">10dp</dimen>
+    <dimen name="sign_in_button_margin_top">32dp</dimen>
+    <dimen name="sign_in_button_margin">16dp</dimen>
+
+    <!-- ETP Onboarding Popup -->
+    <dimen name="etp_onboarding_popup_width">256dp</dimen>
+
+    <!-- Edit  Fragment  -->
+    <dimen name="bookmark_edit_text_height">48dp</dimen>
+
+    <!-- Search Fragment -->
+    <dimen name="search_fragment_clipboard_item_height">56dp</dimen>
+    <dimen name="search_fragment_clipboard_item_horizontal_margin">12dp</dimen>
+    <dimen name="search_fragment_clipboard_item_vertical_margin">8dp</dimen>
+    <dimen name="search_fragment_clipboard_item_title_margin_start">8dp</dimen>
+    <dimen name="search_fragment_shortcuts_label_margin_horizontal">18dp</dimen>
+    <dimen name="search_fragment_shortcuts_label_margin_vertical">18dp</dimen>
+    <dimen name="search_fragment_pill_height">40dp</dimen>
+    <dimen name="search_fragment_pill_padding_start">20dp</dimen>
+    <dimen name="search_fragment_pill_padding_end">16dp</dimen>
+    <dimen name="search_fragment_pill_padding_vertical">4dp</dimen>
+    <dimen name="search_fragment_scan_button_margin_end">8dp</dimen>
+
+    <dimen name="search_fragment_shortcuts_label_text_size">12sp</dimen>
+    <dimen name="search_fragment_clipboard_title_text_size">15sp</dimen>
+
+    <!-- About Fragment -->
+    <dimen name="about_list_item_height">56dp</dimen>
+    <dimen name="about_list_item_text_padding">8dp</dimen>
+    <dimen name="about_header_fenix_logo_height">80dp</dimen>
+    <dimen name="about_header_icon_margin_top">36dp</dimen>
+    <dimen name="about_header_icon_margin_start_end">84dp</dimen>
+    <dimen name="about_header_title_margin_top">16dp</dimen>
+    <dimen name="about_header_title_padding_start_end">84dp</dimen>
+    <dimen name="about_header_build_info_margin_top">24dp</dimen>
+    <dimen name="about_header_build_date_padding_top">24dp</dimen>
+    <dimen name="about_header_build_date_padding_bottom">24dp</dimen>
+    <dimen name="about_list_margin_top">12dp</dimen>
+    <dimen name="about_items_text_size">16sp</dimen>
+    <dimen name="about_header_text_line_spacing_extra">4dp</dimen>
+
+    <!-- Locale Settings Fragment -->
+    <dimen name="locale_list_margin">16dp</dimen>
+    <dimen name="locale_item_text_margin_start">32dp</dimen>
+    <dimen name="locale_item_text_margin_end">16dp</dimen>
+    <dimen name="locale_item_text_margin_gone_start">72dp</dimen>
+    <dimen name="locale_item_title_size">16sp</dimen>
+    <dimen name="locale_item_subtitle_size">12sp</dimen>
+    <dimen name="locale_item_height">48dp</dimen>
+
+    <!--Migration Activity-->
+    <dimen name="migration_margin_horizontal_large">20dp</dimen>
+    <dimen name="migration_margin">16dp</dimen>
+    <dimen name="migration_firefox_logo_size">48dp</dimen>
+    <dimen name="migration_default_text_size">16sp</dimen>
+    <dimen name="migration_welcome_title_text_size">20sp</dimen>
+    <dimen name="migration_button_text_size">14sp</dimen>
+    <dimen name="migration_progress_size">24dp</dimen>
+    <dimen name="migration_progress_margin">8dp</dimen>
+    <dimen name="migration_progress_margin_start">4dp</dimen>
+    <dimen name="migration_progress_margin_compound">44dp</dimen>
+
+    <!-- Share Fragment -->
+    <dimen name="share_recent_apps_background_radius">10dp</dimen>
+    <dimen name="share_recent_apps_padding">8dp</dimen>
+    <dimen name="share_recent_apps_margin">8dp</dimen>
+    <dimen name="share_all_apps_header_margin">16dp</dimen>
+    <dimen name="share_list_min_height">160dp</dimen>
+    <dimen name="share_all_apps_list_margin">8dp</dimen>
+    <dimen name="share_all_apps_list_padding_start">16dp</dimen>
+    <dimen name="share_all_apps_list_padding_end">8dp</dimen>
+    <dimen name="share_header_text_size">12sp</dimen>
+    <dimen name="share_progress_bar_margin">16dp</dimen>
+
+    <!--  Onboarding  -->
+    <dimen name="onboarding_dual_pane_radio_button_translation_x">-7dp</dimen>
+    <dimen name="onboarding_dual_pane_radio_button_translation_y">-8dp</dimen>
+
+    <!-- Addon Details Fragment -->
+    <dimen name="addon_details_rating_view_margin_start">6dp</dimen>
+    <dimen name="addon_details_rating_view_margin_end">6dp</dimen>
+
+    <!-- Tabs Tray -->
+    <dimen name="tab_tray_top_offset">40dp</dimen>
+    <dimen name="tab_tray_thumbnail_width">92dp</dimen>
+    <dimen name="tab_tray_thumbnail_height">69dp</dimen>
+
+    <!-- Saved Logins Fragment -->
+    <dimen name="saved_logins_sort_menu_dropdown_chevron_icon_margin_start">10dp</dimen>
+    <dimen name="saved_logins_sort_menu_dropdown_chevron_icon_size">12dp</dimen>
+    <dimen name="saved_logins_detail_menu_vertical_padding">5dp</dimen>
+    <dimen name="saved_logins_end_icon_drawable_padding">16dp</dimen>
+    <dimen name="saved_logins_item_padding">4dp</dimen>
+    <dimen name="saved_logins_item_margin_start">16dp</dimen>
+    <dimen name="saved_logins_item_margin_end">48dp</dimen>
+
+    <!-- a11y -->
+    <dimen name="accessibility_min_height">48dp</dimen>
+
 </resources>

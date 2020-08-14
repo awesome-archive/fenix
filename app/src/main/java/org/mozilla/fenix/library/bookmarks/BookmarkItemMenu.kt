@@ -1,6 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.library.bookmarks
 
@@ -10,13 +10,14 @@ import mozilla.components.browser.menu.item.SimpleBrowserMenuItem
 import mozilla.components.concept.storage.BookmarkNode
 import mozilla.components.concept.storage.BookmarkNodeType
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ThemeManager
+import org.mozilla.fenix.library.LibraryItemMenu
+import org.mozilla.fenix.theme.ThemeManager
 
 class BookmarkItemMenu(
     private val context: Context,
     private val item: BookmarkNode,
     private val onItemTapped: (BookmarkItemMenu.Item) -> Unit = {}
-) {
+) : LibraryItemMenu {
 
     sealed class Item {
         object Edit : Item()
@@ -28,10 +29,10 @@ class BookmarkItemMenu(
         object Delete : Item()
     }
 
-    val menuBuilder by lazy { BrowserMenuBuilder(menuItems) }
+    override val menuBuilder by lazy { BrowserMenuBuilder(menuItems) }
 
     private val menuItems by lazy {
-        listOf(
+        listOfNotNull(
             if (item.type in listOf(BookmarkNodeType.ITEM, BookmarkNodeType.FOLDER)) {
                 SimpleBrowserMenuItem(context.getString(R.string.bookmark_menu_edit_button)) {
                     onItemTapped.invoke(BookmarkItemMenu.Item.Edit)
@@ -63,6 +64,6 @@ class BookmarkItemMenu(
             ) {
                 onItemTapped.invoke(BookmarkItemMenu.Item.Delete)
             }
-        ).filterNotNull()
+        )
     }
 }

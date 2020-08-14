@@ -18,8 +18,9 @@
     app:cardElevation="5dp">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/inner_layout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="match_parent">
 
         <ImageView
             android:id="@+id/favicon_image"
@@ -29,10 +30,25 @@
             android:adjustViewBounds="true"
             android:importantForAccessibility="no"
             android:scaleType="fitCenter"
-            app:layout_constraintDimensionRatio="1:1"
             app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintDimensionRatio="1:1"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+
+        <ImageButton
+            android:id="@+id/play_pause_button"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/mozac_feature_media_notification_action_pause"
+            android:elevation="10dp"
+            android:visibility="gone"
+            app:layout_constraintCircle="@id/favicon_image"
+            app:layout_constraintCircleAngle="45"
+            app:layout_constraintCircleRadius="28dp"
+            app:layout_constraintEnd_toEndOf="@id/favicon_image"
+            app:layout_constraintTop_toTopOf="@id/favicon_image"
+            app:srcCompat="@drawable/pause_with_background" />
 
         <TextView
             android:id="@+id/hostname"
@@ -57,22 +73,21 @@
             android:minLines="2"
             android:textColor="?primaryText"
             android:textSize="14sp"
-            app:layout_constraintStart_toEndOf="@id/favicon_image"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@id/hostname"
-            app:layout_constraintTop_toBottomOf="@id/hostname"
-            app:layout_constraintBottom_toBottomOf="parent"/>
+            app:layout_constraintStart_toEndOf="@id/favicon_image"
+            app:layout_constraintTop_toBottomOf="@id/hostname" />
 
         <ImageButton
             android:id="@+id/close_tab_button"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:layout_margin="13dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:alpha="0.8"
-            android:contentDescription="@string/close_tab"
-            android:src="@drawable/ic_close"
             android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close_tab"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_close" />
 
         <View
             android:id="@+id/selected_border"
@@ -81,7 +96,9 @@
             android:background="@drawable/session_border"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.0" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>

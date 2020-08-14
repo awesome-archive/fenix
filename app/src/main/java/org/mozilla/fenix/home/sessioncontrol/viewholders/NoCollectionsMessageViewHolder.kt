@@ -1,0 +1,30 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.mozilla.fenix.home.sessioncontrol.viewholders
+
+import android.view.View
+import androidx.core.view.isVisible
+import kotlinx.android.synthetic.main.no_collections_message.*
+import org.mozilla.fenix.R
+import org.mozilla.fenix.utils.view.ViewHolder
+import org.mozilla.fenix.home.sessioncontrol.CollectionInteractor
+
+open class NoCollectionsMessageViewHolder(
+    view: View,
+    interactor: CollectionInteractor,
+    hasNormalTabsOpened: Boolean
+) : ViewHolder(view) {
+
+    init {
+        add_tabs_to_collections_button.setOnClickListener {
+            interactor.onAddTabsToCollectionTapped()
+        }
+        add_tabs_to_collections_button.isVisible = hasNormalTabsOpened
+    }
+
+    companion object {
+        const val LAYOUT_ID = R.layout.no_collections_message
+    }
+}

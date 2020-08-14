@@ -4,39 +4,35 @@
 
 package org.mozilla.fenix.settings
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.view.LayoutInflater
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.text.HtmlCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.NavHostFragment.findNavController
+import androidx.navigation.fragment.findNavController
 import mozilla.components.feature.qr.QrFeature
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.support.base.feature.UserInteractionHandler
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import org.mozilla.fenix.R
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.showToolbar
 
-class PairFragment : Fragment(), BackHandler {
+class PairFragment : Fragment(R.layout.fragment_pair), UserInteractionHandler {
+
     private val qrFeature = ViewBoundFeatureWrapper<QrFeature>()
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_pair, container, false)
-    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val instructionsText = view.findViewById(R.id.pair_instructions) as TextView
-        instructionsText.setText(HtmlCompat.fromHtml(getString(R.string.pair_instructions),
-            HtmlCompat.FROM_HTML_MODE_LEGACY))
-
         qrFeature.set(
             QrFeature(
                 requireContext(),
-                fragmentManager = requireFragmentManager(),
+                fragmentManager = parentFragmentManager,
                 onNeedToRequestPermissions = { permissions ->
                     requestPermissions(permissions, REQUEST_CODE_CAMERA_PERMISSIONS)
                 },
@@ -45,9 +41,24 @@ class PairFragment : Fragment(), BackHandler {
                         requireContext(),
                         pairingUrl
                     )
-                    findNavController(this@PairFragment)
-                        .popBackStack(R.id.turnOnSyncFragment, false)
-                }),
+                    val vibrator = requireContext().getSystemService<Vibrator>()!!
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator.vibrate(
+                            VibrationEffect.createOneShot(
+                                VIBRATE_LENGTH,
+                                VibrationEffect.DEFAULT_AMPLITUDE
+                            )
+                        )
+                    } else {
+                        @Suppress("Deprecation")
+                        vibrator.vibrate(VIBRATE_LENGTH)
+                    }
+                    findNavController(this@PairFragment).popBackStack(
+                        R.id.turnOnSyncFragment,
+                        false
+                    )
+                },
+            scanMessage = R.string.pair_instructions_2),
             owner = this,
             view = view
         )
@@ -59,25 +70,38 @@ class PairFragment : Fragment(), BackHandler {
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).title = getString(R.string.preferences_sync)
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(getString(R.string.sync_scan_code))
     }
 
     override fun onBackPressed(): Boolean {
         qrFeature.onBackPressed()
-        findNavController(this@PairFragment)
-            .popBackStack(R.id.turnOnSyncFragment, false)
+        findNavController().popBackStack(R.id.turnOnSyncFragment, false)
         return true
     }
 
     companion object {
         private const val REQUEST_CODE_CAMERA_PERMISSIONS = 1
+        private const val VIBRATE_LENGTH = 200L
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
         when (requestCode) {
-            REQUEST_CODE_CAMERA_PERMISSIONS -> qrFeature.withFeature {
-                it.onPermissionsResult(permissions, grantResults)
+            REQUEST_CODE_CAMERA_PERMISSIONS -> {
+                if (ContextCompat.checkSelfPermission(
+                        requireContext(),
+                        android.Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    qrFeature.withFeature {
+                        it.onPermissionsResult(permissions, grantResults)
+                    }
+                } else {
+                    findNavController().popBackStack(R.id.turnOnSyncFragment, false)
+                }
             }
         }
     }

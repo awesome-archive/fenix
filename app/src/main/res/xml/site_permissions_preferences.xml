@@ -2,35 +2,44 @@
 <!-- This Source Code Form is subject to the terms of the Mozilla Public
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
-<androidx.preference.PreferenceScreen
-        xmlns:android="http://schemas.android.com/apk/res/android">
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <androidx.preference.Preference
-            android:icon="@drawable/ic_internet"
-            android:key="@string/pref_key_show_site_exceptions"
-            android:title="@string/preference_exceptions"/>
+            android:icon="@drawable/ic_autoplay_enabled"
+            android:key="@string/pref_key_browser_feature_autoplay_audible"
+            android:title="@string/preference_browser_feature_autoplay"
+            android:summary="@string/preference_option_autoplay_blocked3"/>
 
     <androidx.preference.Preference
-            android:icon="@drawable/ic_camera"
+            android:icon="@drawable/ic_camera_enabled"
             android:key="@string/pref_key_phone_feature_camera"
             android:title="@string/preference_phone_feature_camera"
             android:summary="@string/preference_option_phone_feature_ask_to_allow"/>
 
     <androidx.preference.Preference
-            android:icon="@drawable/ic_location"
+            android:icon="@drawable/ic_location_enabled"
             android:key="@string/pref_key_phone_feature_location"
             android:title="@string/preference_phone_feature_location"
             android:summary="@string/preference_option_phone_feature_ask_to_allow"/>
 
     <androidx.preference.Preference
-            android:icon="@drawable/ic_microphone"
+            android:icon="@drawable/ic_microphone_enabled"
             android:key="@string/pref_key_phone_feature_microphone"
             android:title="@string/preference_phone_feature_microphone"
             android:summary="@string/preference_option_phone_feature_ask_to_allow"/>
 
     <androidx.preference.Preference
-            android:icon="@drawable/ic_notification"
+            android:icon="@drawable/ic_notifications_enabled"
             android:key="@string/pref_key_phone_feature_notification"
             android:title="@string/preference_phone_feature_notification"
-            android:summary="@string/preference_option_phone_feature_ask_to_allow"/>
+            android:summary="@string/preference_option_phone_feature_ask_to_allow"
+            app:allowDividerBelow="true"/>
+
+    <androidx.preference.Preference
+            android:icon="@drawable/ic_internet"
+            android:key="@string/pref_key_show_site_exceptions"
+            android:title="@string/preference_exceptions"
+            app:allowDividerAbove="true"/>
+
 </androidx.preference.PreferenceScreen>

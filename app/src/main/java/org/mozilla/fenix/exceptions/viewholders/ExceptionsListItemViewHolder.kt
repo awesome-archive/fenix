@@ -1,61 +1,39 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.exceptions.viewholders
 
 import android.view.View
-import androidx.recyclerview.widget.RecyclerView
-import io.reactivex.Observer
-import kotlinx.android.synthetic.main.exception_item.view.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import mozilla.components.browser.icons.IconRequest
+import kotlinx.android.synthetic.main.exception_item.*
+import mozilla.components.browser.icons.BrowserIcons
 import org.mozilla.fenix.R
-import org.mozilla.fenix.exceptions.ExceptionsAction
-import org.mozilla.fenix.exceptions.ExceptionsItem
+import org.mozilla.fenix.exceptions.ExceptionsInteractor
 import org.mozilla.fenix.ext.components
-import kotlin.coroutines.CoroutineContext
+import org.mozilla.fenix.ext.loadIntoView
+import org.mozilla.fenix.utils.view.ViewHolder
 
-class ExceptionsListItemViewHolder(
+/**
+ * View holder for a single website that is exempted from Tracking Protection or Logins.
+ */
+class ExceptionsListItemViewHolder<T : Any>(
     view: View,
-    private val actionEmitter: Observer<ExceptionsAction>,
-    val job: Job
-) : RecyclerView.ViewHolder(view), CoroutineScope {
+    private val interactor: ExceptionsInteractor<T>,
+    private val icons: BrowserIcons = view.context.components.core.icons
+) : ViewHolder(view) {
 
-    override val coroutineContext: CoroutineContext
-        get() = Dispatchers.IO + job
-
-    private val favicon = view.favicon_image
-    private val url = view.domainView
-    private val deleteButton = view.delete_exception
-
-    private var item: ExceptionsItem? = null
+    private lateinit var item: T
 
     init {
-        deleteButton.setOnClickListener {
-            item?.let {
-                actionEmitter.onNext(ExceptionsAction.Delete.One(it))
-            }
+        delete_exception.setOnClickListener {
+            interactor.onDeleteOne(item)
         }
     }
 
-    fun bind(item: ExceptionsItem) {
+    fun bind(item: T, url: String) {
         this.item = item
-        url.text = item.url
-        updateFavIcon(item.url)
-    }
-
-    private fun updateFavIcon(url: String) {
-        launch(Dispatchers.IO) {
-            val bitmap = favicon.context.components.core.icons
-                .loadIcon(IconRequest(url)).await().bitmap
-            launch(Dispatchers.Main) {
-                favicon.setImageBitmap(bitmap)
-            }
-        }
+        webAddressView.text = url
+        icons.loadIntoView(favicon_image, url)
     }
 
     companion object {

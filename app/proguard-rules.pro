@@ -26,21 +26,36 @@
 -dontwarn com.google.**
 -dontwarn org.mozilla.geckoview.**
 
-####################################################################################################
-# Kotlinx
-####################################################################################################
+# Raptor now writes a *-config.yaml file to specify Gecko runtime settings (e.g. the profile dir). This
+# file gets deserialized into a DebugConfig object, which is why we need to keep this class
+# and its members.
+-keep class org.mozilla.gecko.util.DebugConfig { *; }
 
--keep class kotlinx.coroutines.internal.MainDispatcherFactory {}
--keep class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembernames class kotlinx.** {
-    volatile <fields>;
+####################################################################################################
+# Force removal of slow Dispatchers.Main ServiceLoader
+####################################################################################################
+# Allow R8 to optimize away the FastServiceLoader.
+# Together with ServiceLoader optimization in R8
+# this results in direct instantiation when loading Dispatchers.Main
+-assumenosideeffects class kotlinx.coroutines.internal.MainDispatcherLoader {
+    boolean FAST_SERVICE_LOADER_ENABLED return false;
+}
+
+-assumenosideeffects class kotlinx.coroutines.internal.FastServiceLoader {
+    boolean ANDROID_DETECTED return true;
 }
 
 ####################################################################################################
 # Mozilla Application Services
 ####################################################################################################
 
--keep class mozilla.appservices.FenixMegazord  { *; }
+-keep class mozilla.appservices.** { *; }
+
+####################################################################################################
+# ViewModels
+####################################################################################################
+
+-keep class org.mozilla.fenix.**ViewModel { *; }
 
 ####################################################################################################
 # Adjust
@@ -76,5 +91,24 @@
 # Keep code generated from Glean Metrics
 -keep class org.mozilla.fenix.GleanMetrics.** {  *; }
 
-# Keep methods that are called by MotionLayout
--keep class org.mozilla.fenix.home.SearchView { *; }
+# Keep motionlayout internal methods
+# https://github.com/mozilla-mobile/fenix/issues/2094
+-keep class androidx.constraintlayout.** { *; }
+
+# Keep adjust relevant classes
+-keep class com.adjust.sdk.** { *; }
+-keep class com.google.android.gms.common.ConnectionResult {
+    int SUCCESS;
+}
+-keep class com.google.android.gms.ads.identifier.AdvertisingIdClient {
+    com.google.android.gms.ads.identifier.AdvertisingIdClient$Info getAdvertisingIdInfo(android.content.Context);
+}
+-keep class com.google.android.gms.ads.identifier.AdvertisingIdClient$Info {
+    java.lang.String getId();
+    boolean isLimitAdTrackingEnabled();
+}
+-keep public class com.android.installreferrer.** { *; }
+
+# Keep Android Lifecycle methods
+# https://bugzilla.mozilla.org/show_bug.cgi?id=1596302
+-keep class androidx.lifecycle.** { *; }

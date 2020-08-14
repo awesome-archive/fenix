@@ -1,29 +1,24 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.exceptions.viewholders
 
 import android.view.View
 import androidx.recyclerview.widget.RecyclerView
-import io.reactivex.Observer
-import kotlinx.android.synthetic.main.delete_exceptions_button.view.*
+import com.google.android.material.button.MaterialButton
 import org.mozilla.fenix.R
-import org.mozilla.fenix.exceptions.ExceptionsAction
+import org.mozilla.fenix.exceptions.ExceptionsInteractor
 
 class ExceptionsDeleteButtonViewHolder(
     view: View,
-    private val actionEmitter: Observer<ExceptionsAction>
+    private val interactor: ExceptionsInteractor<*>
 ) : RecyclerView.ViewHolder(view) {
-    private val deleteButton = view.removeAllExceptions
 
     init {
+        val deleteButton: MaterialButton = view.findViewById(R.id.removeAllExceptions)
         deleteButton.setOnClickListener {
-            actionEmitter.onNext(ExceptionsAction.Delete.All)
+            interactor.onDeleteAll()
         }
-    }
-
-    companion object {
-        const val LAYOUT_ID = R.layout.delete_exceptions_button
     }
 }

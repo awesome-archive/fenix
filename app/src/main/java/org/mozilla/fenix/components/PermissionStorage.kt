@@ -1,6 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.components
 
@@ -9,13 +9,14 @@ import androidx.paging.DataSource
 import mozilla.components.feature.sitepermissions.SitePermissions
 import mozilla.components.feature.sitepermissions.SitePermissions.Status
 import mozilla.components.feature.sitepermissions.SitePermissionsStorage
-import org.mozilla.fenix.test.Mockable
+import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.utils.Mockable
 
 @Mockable
 class PermissionStorage(private val context: Context) {
 
-    private val permissionsStorage by lazy {
-        SitePermissionsStorage(context)
+    val permissionsStorage by lazy {
+        SitePermissionsStorage(context, context.components.core.engine)
     }
 
     fun addSitePermissionException(

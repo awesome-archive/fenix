@@ -5,58 +5,78 @@
 package org.mozilla.fenix.customtabs
 
 import android.app.Activity
-import android.content.Context
-import android.view.Gravity
-import android.view.View
-import androidx.coordinatorlayout.widget.CoordinatorLayout
-import androidx.core.widget.NestedScrollView
+import androidx.appcompat.content.res.AppCompatResources.getDrawable
 import mozilla.components.browser.session.SessionManager
 import mozilla.components.browser.toolbar.BrowserToolbar
+import mozilla.components.browser.toolbar.display.DisplayToolbar
 import mozilla.components.feature.customtabs.CustomTabsToolbarFeature
-import mozilla.components.support.base.feature.BackHandler
 import mozilla.components.support.base.feature.LifecycleAwareFeature
+import mozilla.components.support.base.feature.UserInteractionHandler
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.toolbar.ToolbarMenu
+import org.mozilla.fenix.ext.settings
 
 class CustomTabsIntegration(
-    context: Context,
     sessionManager: SessionManager,
     toolbar: BrowserToolbar,
     sessionId: String,
-    activity: Activity?,
-    quickActionbar: NestedScrollView,
-    engineLayout: View,
-    onItemTapped: (ToolbarMenu.Item) -> Unit = {}
-) : LifecycleAwareFeature, BackHandler {
+    activity: Activity,
+    onItemTapped: (ToolbarMenu.Item) -> Unit = {},
+    shouldReverseItems: Boolean,
+    isPrivate: Boolean
+) : LifecycleAwareFeature, UserInteractionHandler {
 
     init {
         // Remove toolbar shadow
         toolbar.elevation = 0f
 
-        // Reduce margin height of EngineView from the top for the toolbar
-        engineLayout.run {
-            (layoutParams as CoordinatorLayout.LayoutParams).apply {
-                val toolbarHeight = resources.getDimension(R.dimen.browser_toolbar_height).toInt()
-                setMargins(0, toolbarHeight, 0, 0)
-            }
+        val uncoloredEtpShield = getDrawable(activity, R.drawable.ic_tracking_protection_enabled)!!
+
+        toolbar.display.icons = toolbar.display.icons.copy(
+            // Custom private tab backgrounds have bad contrast against the colored shield
+            trackingProtectionTrackersBlocked = uncoloredEtpShield,
+            trackingProtectionNothingBlocked = uncoloredEtpShield,
+            trackingProtectionException = getDrawable(
+                activity,
+                R.drawable.ic_tracking_protection_disabled
+            )!!
+        )
+
+        toolbar.display.displayIndicatorSeparator = false
+        if (activity.settings().shouldUseTrackingProtection) {
+            toolbar.display.indicators = listOf(
+                DisplayToolbar.Indicators.SECURITY,
+                DisplayToolbar.Indicators.TRACKING_PROTECTION
+            )
+        } else {
+            toolbar.display.indicators = listOf(
+                DisplayToolbar.Indicators.SECURITY
+            )
         }
 
-        // Make the toolbar go to the top.
-        toolbar.run {
-            (layoutParams as CoordinatorLayout.LayoutParams).apply {
-                gravity = Gravity.TOP
+        // If in private mode, override toolbar background to use private color
+        // See #5334
+        if (isPrivate) {
+            sessionManager.findSessionById(sessionId)?.apply {
+                val config = customTabConfig
+                customTabConfig = config?.copy(
+                    // Don't set toolbar background automatically
+                    toolbarColor = null,
+                    // Force tinting the action button
+                    actionButtonConfig = config.actionButtonConfig?.copy(tint = true)
+                )
             }
-        }
 
-        // Hide the Quick Action Bar.
-        quickActionbar.visibility = View.GONE
+            toolbar.background = getDrawable(activity, R.drawable.toolbar_background)
+        }
     }
 
     private val customTabToolbarMenu by lazy {
         CustomTabToolbarMenu(
-            context,
+            activity,
             sessionManager,
             sessionId,
+            shouldReverseItems,
             onItemTapped = onItemTapped
         )
     }
@@ -65,23 +85,18 @@ class CustomTabsIntegration(
         sessionManager,
         toolbar,
         sessionId,
-        customTabToolbarMenu.menuBuilder,
-        START_OF_MENU_ITEMS_INDEX,
-        closeListener = { activity?.finish() })
+        menuBuilder = customTabToolbarMenu.menuBuilder,
+        menuItemIndex = START_OF_MENU_ITEMS_INDEX,
+        window = activity.window,
+        shareListener = { onItemTapped.invoke(ToolbarMenu.Item.Share) },
+        closeListener = { activity.finish() }
+    )
 
-    override fun start() {
-        feature.start()
-    }
-
-    override fun stop() {
-        feature.stop()
-    }
-
-    override fun onBackPressed(): Boolean {
-        return feature.onBackPressed()
-    }
+    override fun start() = feature.start()
+    override fun stop() = feature.stop()
+    override fun onBackPressed() = feature.onBackPressed()
 
     companion object {
-        const val START_OF_MENU_ITEMS_INDEX = 2
+        private const val START_OF_MENU_ITEMS_INDEX = 2
     }
 }

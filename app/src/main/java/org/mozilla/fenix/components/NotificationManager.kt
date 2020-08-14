@@ -13,10 +13,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Build.VERSION.SDK_INT
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
-import mozilla.components.concept.sync.DeviceEvent
+import mozilla.components.concept.sync.Device
 import mozilla.components.concept.sync.TabData
 import mozilla.components.support.base.log.logger.Logger
 import org.mozilla.fenix.R
@@ -33,7 +34,7 @@ class NotificationManager(private val context: Context) {
     init {
         // Create the notification channels we are going to use, but only on API 26+ because the NotificationChannel
         // class is new and not in the support library.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (SDK_INT >= Build.VERSION_CODES.O) {
             createNotificationChannel(
                 RECEIVE_TABS_CHANNEL_ID,
                 // Pick 'high' because this is a user-triggered action that is expected to be part of a continuity flow.
@@ -48,17 +49,20 @@ class NotificationManager(private val context: Context) {
 
     private val logger = Logger("NotificationManager")
 
-    fun showReceivedTabs(event: DeviceEvent.TabReceived) {
+    fun showReceivedTabs(context: Context, device: Device?, tabs: List<TabData>) {
         // In the future, experiment with displaying multiple tabs from the same device as as Notification Groups.
         // For now, a single notification per tab received will suffice.
-        logger.debug("Showing ${event.entries.size} tab(s) received from deviceID=${event.from?.id}")
-        event.entries.forEach { tab ->
+        logger.debug("Showing ${tabs.size} tab(s) received from deviceID=${device?.id}")
+        tabs.forEach { tab ->
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(tab.url))
-            val pendingIntent: PendingIntent = PendingIntent.getActivity(context, 0, intent, 0)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            intent.putExtra(RECEIVE_TABS_TAG, true)
+            val pendingIntent: PendingIntent =
+                PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_ONE_SHOT)
 
             val builder = NotificationCompat.Builder(context, RECEIVE_TABS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_status_logo)
-                .setTitle(event, tab)
+                .setSendTabTitle(context, device, tab)
                 .setWhen(System.currentTimeMillis())
                 .setContentText(tab.url)
                 .setContentIntent(pendingIntent)
@@ -68,7 +72,7 @@ class NotificationManager(private val context: Context) {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setDefaults(Notification.DEFAULT_VIBRATE or Notification.DEFAULT_SOUND)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (SDK_INT >= Build.VERSION_CODES.M) {
                 builder.setCategory(Notification.CATEGORY_REMINDER)
             }
 
@@ -100,12 +104,18 @@ class NotificationManager(private val context: Context) {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun NotificationCompat.Builder.setTitle(
-        event: DeviceEvent.TabReceived,
+    private fun NotificationCompat.Builder.setSendTabTitle(
+        context: Context,
+        device: Device?,
         tab: TabData
     ): NotificationCompat.Builder {
-        event.from?.let { device ->
-            setContentTitle(context.getString(R.string.fxa_tab_received_from_notification_name, device.displayName))
+        device?.let {
+            setContentTitle(
+                context.getString(
+                    R.string.fxa_tab_received_from_notification_name,
+                    it.displayName
+                )
+            )
             return this
         }
 

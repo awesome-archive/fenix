@@ -1,151 +1,147 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.fenix.share
 
-/* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-import android.content.Intent
-import android.content.Intent.ACTION_SEND
-import android.content.Intent.EXTRA_TEXT
-import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.content.Context
 import android.os.Bundle
-import android.os.Parcelable
-import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDialogFragment
-import kotlinx.android.parcel.Parcelize
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.observe
+import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import kotlinx.android.synthetic.main.fragment_share.view.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import mozilla.components.concept.sync.DeviceEventOutgoing
-import mozilla.components.concept.sync.OAuthAccount
-import org.mozilla.fenix.FenixViewModelProvider
+import mozilla.components.browser.state.action.ContentAction
+import mozilla.components.browser.state.selector.findTabOrCustomTab
+import mozilla.components.concept.engine.prompt.PromptRequest
+import mozilla.components.feature.accounts.push.SendTabUseCases
+import mozilla.components.feature.share.RecentAppsStorage
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ext.nav
+import org.mozilla.fenix.components.FenixSnackbar
+import org.mozilla.fenix.ext.getRootView
 import org.mozilla.fenix.ext.requireComponents
-import org.mozilla.fenix.mvi.ActionBusFactory
-import org.mozilla.fenix.mvi.getAutoDisposeObservable
-import kotlin.coroutines.CoroutineContext
 
-class ShareFragment : AppCompatDialogFragment(), CoroutineScope {
-    override val coroutineContext: CoroutineContext
-        get() = Dispatchers.Main + job
-    private lateinit var job: Job
-    private lateinit var component: ShareComponent
-    private var tabs: Array<ShareTab> = emptyArray()
+class ShareFragment : AppCompatDialogFragment() {
+
+    private val args by navArgs<ShareFragmentArgs>()
+    private val viewModel: ShareViewModel by viewModels {
+        AndroidViewModelFactory(requireActivity().application)
+    }
+    private lateinit var shareInteractor: ShareInteractor
+    private lateinit var shareCloseView: ShareCloseView
+    private lateinit var shareToAccountDevicesView: ShareToAccountDevicesView
+    private lateinit var shareToAppsView: ShareToAppsView
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        viewModel.loadDevicesAndApps()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_TITLE, R.style.ShareDialogStyle)
     }
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+    override fun onPause() {
+        super.onPause()
+        consumePrompt { onDismiss() }
+        dismiss()
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
         val view = inflater.inflate(R.layout.fragment_share, container, false)
-        val args = ShareFragmentArgs.fromBundle(arguments!!)
+        val shareData = args.data.toList()
 
-        if (args.url == null && args.tabs.isNullOrEmpty()) {
-            throw IllegalStateException("URL and tabs cannot both be null.")
-        }
+        val accountManager = requireComponents.backgroundServices.accountManager
 
-        job = Job()
-        tabs = args.tabs ?: arrayOf(ShareTab(args.url!!, args.title ?: ""))
-
-        component = ShareComponent(
-            view.share_wrapper,
-            ActionBusFactory.get(this),
-            FenixViewModelProvider.create(
-                this,
-                ShareUIViewModel::class.java
-            ) {
-                ShareUIViewModel(ShareState)
+        shareInteractor = ShareInteractor(
+            DefaultShareController(
+                context = requireContext(),
+                shareSubject = args.shareSubject,
+                shareData = shareData,
+                snackbar = FenixSnackbar.make(
+                    view = requireActivity().getRootView()!!,
+                    isDisplayedWithBrowserToolbar = true
+                ),
+                navController = findNavController(),
+                sendTabUseCases = SendTabUseCases(accountManager),
+                recentAppsStorage = RecentAppsStorage(requireContext()),
+                viewLifecycleScope = viewLifecycleOwner.lifecycleScope
+            ) { result ->
+                consumePrompt {
+                    when (result) {
+                        ShareController.Result.DISMISSED -> onDismiss()
+                        ShareController.Result.SHARE_ERROR -> onFailure()
+                        ShareController.Result.SUCCESS -> onSuccess()
+                    }
+                }
+                super.dismiss()
             }
         )
+
+        view.shareWrapper.setOnClickListener { shareInteractor.onShareClosed() }
+        shareToAccountDevicesView =
+            ShareToAccountDevicesView(view.devicesShareLayout, shareInteractor)
+
+        if (args.showPage) {
+            // Show the previous fragment underneath the share background scrim
+            // by making it translucent.
+            view.closeSharingScrim.alpha = SHOW_PAGE_ALPHA
+            view.shareWrapper.setOnClickListener { shareInteractor.onShareClosed() }
+        } else {
+            // Otherwise, show a list of tabs to share.
+            view.closeSharingScrim.alpha = 1.0f
+            shareCloseView = ShareCloseView(view.closeSharingContent, shareInteractor)
+            shareCloseView.setTabs(shareData)
+        }
+        shareToAppsView = ShareToAppsView(view.appsShareLayout, shareInteractor)
 
         return view
     }
 
-    override fun onResume() {
-        super.onResume()
-        subscribeToActions()
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        job.cancel()
-    }
-
-    @SuppressWarnings("ComplexMethod")
-    private fun subscribeToActions() {
-        getAutoDisposeObservable<ShareAction>().subscribe {
-            when (it) {
-                ShareAction.Close -> {
-                    dismiss()
-                }
-                ShareAction.SignInClicked -> {
-                    val directions = ShareFragmentDirections.actionShareFragmentToTurnOnSyncFragment()
-                    nav(R.id.shareFragment, directions)
-                    dismiss()
-                }
-                ShareAction.AddNewDeviceClicked -> {
-                    AlertDialog.Builder(
-                        ContextThemeWrapper(
-                            context,
-                            R.style.DialogStyle
-                        )
-                    ).apply {
-                        setMessage(R.string.sync_connect_device_dialog)
-                        setPositiveButton(R.string.sync_confirmation_button) { dialog, _ -> dialog.cancel() }
-                        create()
-                    }.show()
-                }
-                is ShareAction.ShareDeviceClicked -> {
-                    val authAccount = requireComponents.backgroundServices.accountManager.authenticatedAccount()
-                    authAccount?.run {
-                        sendSendTab(this, it.device.id, tabs)
-                    }
-                    dismiss()
-                }
-                is ShareAction.SendAllClicked -> {
-                    val authAccount = requireComponents.backgroundServices.accountManager.authenticatedAccount()
-                    authAccount?.run {
-                        it.devices.forEach { device ->
-                            sendSendTab(this, device.id, tabs)
-                        }
-                    }
-                    dismiss()
-                }
-                is ShareAction.ShareAppClicked -> {
-
-                    val shareText = tabs.joinToString("\n") { tab -> tab.url }
-
-                    val intent = Intent(ACTION_SEND).apply {
-                        putExtra(EXTRA_TEXT, shareText)
-                        type = "text/plain"
-                        flags = FLAG_ACTIVITY_NEW_TASK
-                        setClassName(it.item.packageName, it.item.activityName)
-                    }
-                    startActivity(intent)
-                    dismiss()
-                }
-            }
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        viewModel.devicesList.observe(viewLifecycleOwner) { devicesShareOptions ->
+            shareToAccountDevicesView.setShareTargets(devicesShareOptions)
+        }
+        viewModel.appsList.observe(viewLifecycleOwner) { appsToShareTo ->
+            shareToAppsView.setShareTargets(appsToShareTo)
+        }
+        viewModel.recentAppsList.observe(viewLifecycleOwner) { appsToShareTo ->
+            shareToAppsView.setRecentShareTargets(appsToShareTo)
         }
     }
 
-    private fun sendSendTab(account: OAuthAccount, deviceId: String, tabs: Array<ShareTab>) {
-        account.run {
-            tabs.forEach { tab ->
-                deviceConstellation().sendEventToDeviceAsync(
-                    deviceId,
-                    DeviceEventOutgoing.SendTab(tab.title, tab.url)
-                )
+    /**
+     * If [ShareFragmentArgs.sessionId] is set and the session has a pending Web Share
+     * prompt request, call [consume] then clean up the prompt.
+     */
+    private fun consumePrompt(
+        consume: PromptRequest.Share.() -> Unit
+    ) {
+        val browserStore = requireComponents.core.store
+        args.sessionId
+            ?.let { sessionId -> browserStore.state.findTabOrCustomTab(sessionId) }
+            ?.let { tab ->
+                val promptRequest = tab.content.promptRequest
+                if (promptRequest is PromptRequest.Share) {
+                    consume(promptRequest)
+                    browserStore.dispatch(ContentAction.ConsumePromptRequestAction(tab.id))
+                }
             }
-        }
+    }
+
+    companion object {
+        const val SHOW_PAGE_ALPHA = 0.6f
     }
 }
-
-@Parcelize
-data class ShareTab(val url: String, val title: String, val sessionId: String? = null) : Parcelable

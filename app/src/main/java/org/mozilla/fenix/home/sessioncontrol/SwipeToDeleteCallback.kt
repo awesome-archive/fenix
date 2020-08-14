@@ -1,23 +1,21 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.home.sessioncontrol
 
 import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
-import androidx.core.content.ContextCompat
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
-import io.reactivex.Observer
+import mozilla.components.support.ktx.android.content.getColorFromAttr
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ext.getColorFromAttr
 import org.mozilla.fenix.home.sessioncontrol.viewholders.TabInCollectionViewHolder
-import org.mozilla.fenix.home.sessioncontrol.viewholders.TabViewHolder
 
 class SwipeToDeleteCallback(
-    val actionEmitter: Observer<SessionControlAction>
+    val interactor: SessionControlInteractor
 ) : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
     override fun onMove(
         recyclerView: RecyclerView,
@@ -28,19 +26,10 @@ class SwipeToDeleteCallback(
         return false
     }
 
-    override fun getSwipeEscapeVelocity(defaultValue: Float): Float {
-        return defaultValue * SWIPE_VELOCITY_MULTIPLIER
-    }
-
-    override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float {
-        return SWIPE_THRESHOLD
-    }
-
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
         when (viewHolder) {
-            is TabViewHolder -> actionEmitter.onNext(TabAction.Close(viewHolder.tab?.sessionId!!))
             is TabInCollectionViewHolder -> {
-                actionEmitter.onNext(CollectionAction.RemoveTab(viewHolder.collection, viewHolder.tab))
+                interactor.onCollectionRemoveTab(viewHolder.collection, viewHolder.tab, wasSwiped = true)
             }
         }
     }
@@ -55,11 +44,11 @@ class SwipeToDeleteCallback(
         isCurrentlyActive: Boolean
     ) {
         super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
-        val icon = ContextCompat.getDrawable(recyclerView.context, R.drawable.ic_delete)
-        icon?.setTint(R.attr.destructive.getColorFromAttr(recyclerView.context))
+        val icon = AppCompatResources.getDrawable(recyclerView.context, R.drawable.ic_delete)
+        icon?.setTint(recyclerView.context.getColorFromAttr(R.attr.destructive))
 
         val backgroundDrawable = when {
-            viewHolder is TabInCollectionViewHolder && viewHolder.isLastTab -> {
+            viewHolder is TabInCollectionViewHolder && viewHolder.isLastItem -> {
                 R.drawable.tab_in_collection_last_swipe_background
             }
             viewHolder is TabInCollectionViewHolder -> {
@@ -68,7 +57,7 @@ class SwipeToDeleteCallback(
             else -> R.drawable.session_background
         }
 
-        val background = ContextCompat.getDrawable(recyclerView.context, backgroundDrawable)
+        val background = AppCompatResources.getDrawable(recyclerView.context, backgroundDrawable)
         background?.let {
             icon?.let {
                 val itemView = viewHolder.itemView
@@ -116,19 +105,18 @@ class SwipeToDeleteCallback(
         recyclerView: RecyclerView,
         viewHolder: RecyclerView.ViewHolder
     ): Int {
-        return if (viewHolder is TabViewHolder || viewHolder is TabInCollectionViewHolder) {
+        return if (recyclerView.hasWindowFocus() &&
+            viewHolder is TabInCollectionViewHolder
+        ) {
             super.getSwipeDirs(recyclerView, viewHolder)
         } else 0
     }
 
     companion object {
-        const val SWIPE_VELOCITY_MULTIPLIER = 10F
-        const val SWIPE_THRESHOLD = 0.55f
         const val BACKGROUND_CORNER_OFFSET = 40
         const val MARGIN = 32
         const val DENSITY_CONVERSION = 160f
 
-        @Suppress("LongParameterList")
         private fun draw(
             background: Drawable,
             icon: Drawable,

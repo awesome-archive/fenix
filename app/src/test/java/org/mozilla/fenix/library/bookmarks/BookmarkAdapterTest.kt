@@ -1,40 +1,33 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.library.bookmarks
 
-import io.mockk.Runs
-import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import io.mockk.spyk
-import io.mockk.verifySequence
-import io.reactivex.Observer
-import io.reactivex.observers.TestObserver
+import io.mockk.verifyOrder
 import mozilla.components.concept.storage.BookmarkNode
 import mozilla.components.concept.storage.BookmarkNodeType
 import org.junit.Before
 import org.junit.Test
-import org.mozilla.fenix.TestUtils.setRxSchedulers
+import org.junit.runner.RunWith
+import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
 
+@RunWith(FenixRobolectricTestRunner::class)
 internal class BookmarkAdapterTest {
 
     private lateinit var bookmarkAdapter: BookmarkAdapter
-    private lateinit var emitter: Observer<BookmarkAction>
 
     @Before
     fun setup() {
-        setRxSchedulers()
-        emitter = TestObserver<BookmarkAction>()
         bookmarkAdapter = spyk(
-            BookmarkAdapter(mockk(), emitter), recordPrivateCalls = true
+            BookmarkAdapter(mockk(relaxed = true), mockk())
         )
-        every { bookmarkAdapter.notifyDataSetChanged() } just Runs
     }
 
     @Test
-    fun `update adapter from tree of bookmark nodes`() {
+    fun `update adapter from tree of bookmark nodes, null tree returns empty list`() {
         val tree = BookmarkNode(
             BookmarkNodeType.FOLDER, "123", null, 0, "Mobile", null, listOf(
                 BookmarkNode(BookmarkNodeType.ITEM, "456", "123", 0, "Mozilla", "http://mozilla.org", null),
@@ -50,23 +43,13 @@ internal class BookmarkAdapterTest {
                 )
             )
         )
-        bookmarkAdapter.updateData(tree, BookmarkState.Mode.Normal)
-        verifySequence {
-            bookmarkAdapter.updateData(tree, BookmarkState.Mode.Normal)
-            bookmarkAdapter setProperty "tree" value tree.children
-            bookmarkAdapter setProperty "mode" value BookmarkState.Mode.Normal
-            bookmarkAdapter.notifyDataSetChanged()
-        }
-    }
-
-    @Test
-    fun `passing null tree returns empty list`() {
-        bookmarkAdapter.updateData(null, BookmarkState.Mode.Normal)
-        verifySequence {
-            bookmarkAdapter.updateData(null, BookmarkState.Mode.Normal)
-            bookmarkAdapter setProperty "tree" value listOf<BookmarkNode?>()
-            bookmarkAdapter setProperty "mode" value BookmarkState.Mode.Normal
-            bookmarkAdapter.notifyDataSetChanged()
+        bookmarkAdapter.updateData(tree, BookmarkFragmentState.Mode.Normal())
+        bookmarkAdapter.updateData(null, BookmarkFragmentState.Mode.Normal())
+        verifyOrder {
+            bookmarkAdapter.updateData(tree, BookmarkFragmentState.Mode.Normal())
+            bookmarkAdapter.notifyItemRangeInserted(0, 3)
+            bookmarkAdapter.updateData(null, BookmarkFragmentState.Mode.Normal())
+            bookmarkAdapter.notifyItemRangeRemoved(0, 3)
         }
     }
 }

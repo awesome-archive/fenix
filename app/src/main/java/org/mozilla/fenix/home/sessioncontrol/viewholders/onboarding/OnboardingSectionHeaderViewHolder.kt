@@ -1,6 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.home.sessioncontrol.viewholders.onboarding
 
@@ -10,10 +10,12 @@ import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.onboarding_section_header.view.*
 import org.mozilla.fenix.R
 
-class OnboardingSectionHeaderViewHolder(private val view: View) : RecyclerView.ViewHolder(view) {
+class OnboardingSectionHeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+
+    private val sectionHeader = view.section_header_text
 
     fun bind(labelBuilder: (Context) -> String) {
-        view.section_header_text.text = labelBuilder(view.context)
+        sectionHeader.text = labelBuilder(itemView.context)
     }
 
     companion object {

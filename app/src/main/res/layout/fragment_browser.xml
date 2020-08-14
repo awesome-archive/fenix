@@ -4,7 +4,6 @@
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:mozac="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/browserLayout"
     android:layout_width="match_parent"
@@ -15,34 +14,32 @@
         android:id="@+id/swipeRefresh"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="@dimen/toolbar_and_qab_height">
+        android:alpha="0"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
         <mozilla.components.concept.engine.EngineView
             android:id="@+id/engineView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:visibility="gone" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/nestedScrollQuickAction"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?foundation"
-        android:clipToPadding="true"
-        app:behavior_hideable="true"
-        app:behavior_peekHeight="12dp"
-        app:layout_behavior="org.mozilla.fenix.quickactionsheet.QuickActionSheetBehavior" />
 
-    <mozilla.components.feature.findinpage.view.FindInPageBar
-        android:id="@+id/findInPageView"
+    <ViewStub
+        android:id="@+id/stubFindInPage"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:layout_gravity="bottom"
-        android:background="?foundation"
-        android:clickable="true"
-        android:visibility="gone"
-        app:findInPageNoMatchesTextColor="?attr/destructive"
-        mozac:findInPageButtonsTint="?primaryText"
-        mozac:findInPageResultCountTextColor="?primaryText" />
+        android:inflatedId="@+id/findInPageView"
+        android:layout="@layout/stub_find_in_page" />
+
+    <include
+        android:id="@+id/viewDynamicDownloadDialog"
+        layout="@layout/download_dialog_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:visibility="gone" />
 
     <mozilla.components.feature.readerview.view.ReaderViewControlsBar
         android:id="@+id/readerViewControlsBar"

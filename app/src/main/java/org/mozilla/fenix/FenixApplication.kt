@@ -1,149 +1,287 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix
 
 import android.annotation.SuppressLint
-import android.app.Application
+import android.os.Build
+import android.os.Build.VERSION.SDK_INT
+import android.os.StrictMode
+import android.util.Log.INFO
+import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatDelegate
-import io.reactivex.plugins.RxJavaPlugins
+import androidx.core.content.getSystemService
+import androidx.work.Configuration.Builder
+import androidx.work.Configuration.Provider
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mozilla.components.concept.fetch.Client
-import mozilla.components.lib.fetch.httpurlconnection.HttpURLConnectionClient
-import mozilla.components.service.fretboard.Fretboard
-import mozilla.components.service.fretboard.source.kinto.KintoExperimentSource
-import mozilla.components.service.fretboard.storage.flatfile.FlatFileExperimentStorage
+import mozilla.appservices.Megazord
+import mozilla.components.browser.session.Session
+import mozilla.components.concept.push.PushProcessor
+import mozilla.components.feature.addons.update.GlobalAddonDependencyProvider
+import mozilla.components.lib.crash.CrashReporter
+import mozilla.components.service.experiments.Experiments
+import mozilla.components.service.glean.Glean
+import mozilla.components.service.glean.config.Configuration
+import mozilla.components.service.glean.net.ConceptFetchHttpUploader
 import mozilla.components.support.base.log.Log
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.base.log.sink.AndroidLogSink
 import mozilla.components.support.ktx.android.content.isMainProcess
 import mozilla.components.support.ktx.android.content.runOnlyInMainProcess
+import mozilla.components.support.locale.LocaleAwareApplication
+import mozilla.components.support.rusthttp.RustHttpConfig
 import mozilla.components.support.rustlog.RustLog
+import mozilla.components.support.utils.logElapsedTime
+import mozilla.components.support.webextensions.WebExtensionSupport
+import org.mozilla.fenix.StrictModeManager.enableStrictMode
 import org.mozilla.fenix.components.Components
-import org.mozilla.fenix.utils.Settings
-import java.io.File
+import org.mozilla.fenix.components.metrics.MetricServiceType
+import org.mozilla.fenix.ext.resetPoliciesAfter
+import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.perf.StorageStatsMetrics
+import org.mozilla.fenix.perf.StartupTimeline
+import org.mozilla.fenix.push.PushFxaIntegration
+import org.mozilla.fenix.push.WebPushEngineIntegration
+import org.mozilla.fenix.session.PerformanceActivityLifecycleCallbacks
+import org.mozilla.fenix.session.VisibilityLifecycleCallback
+import org.mozilla.fenix.utils.BrowsersCache
 
-@SuppressLint("Registered")
-@Suppress("TooManyFunctions")
-open class FenixApplication : Application() {
-    lateinit var fretboard: Fretboard
-    lateinit var experimentLoader: Deferred<Boolean>
-    var experimentLoaderComplete: Boolean = false
+/**
+ *The main application class for Fenix. Records data to measure initialization performance.
+ *  Installs [CrashReporter], initializes [Glean]  in fenix builds and setup Megazord in the main process.
+ */
+@Suppress("Registered", "TooManyFunctions", "LargeClass")
+open class FenixApplication : LocaleAwareApplication(), Provider {
+    init {
+        recordOnInit() // DO NOT MOVE ANYTHING ABOVE HERE: the timing of this measurement is critical.
+    }
+
+    private val logger = Logger("FenixApplication")
 
     open val components by lazy { Components(this) }
+
+    var visibilityLifecycleCallback: VisibilityLifecycleCallback? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
 
-        setupApplication()
-    }
-
-    open fun setupApplication() {
-        // loadExperiments does things that run in parallel with the rest of setup.
-        // Call the function as early as possible so there's maximum overlap.
-        experimentLoader = loadExperiments()
-
-        setDayNightTheme()
-        val megazordEnabled = setupMegazord()
-        setupLogging(megazordEnabled)
-        registerRxExceptionHandling()
-        setupCrashReporting()
+        setupInAllProcesses()
 
         if (!isMainProcess()) {
             // If this is not the main process then do not continue with the initialization here. Everything that
             // follows only needs to be done in our app's main process and should not be done in other processes like
             // a GeckoView child process or the crash handling process. Most importantly we never want to end up in a
-            // situation where we create a GeckoRuntime from the Gecko child process (
+            // situation where we create a GeckoRuntime from the Gecko child process.
             return
         }
 
+        if (Config.channel.isFenix) {
+            // We need to always initialize Glean and do it early here.
+            // Note that we are only initializing Glean here for "fenix" builds. "fennec" builds
+            // will initialize in MigratingFenixApplication because we first need to migrate the
+            // user's choice from Fennec.
+            initializeGlean()
+        }
+
+        setupInMainProcessOnly()
+    }
+
+    protected open fun initializeGlean() {
+        val telemetryEnabled = settings().isTelemetryEnabled
+
+        logger.debug("Initializing Glean (uploadEnabled=$telemetryEnabled, isFennec=${Config.channel.isFennec})")
+
+        Glean.initialize(
+            applicationContext = this,
+            configuration = Configuration(
+                channel = BuildConfig.BUILD_TYPE,
+                httpClient = ConceptFetchHttpUploader(
+                    lazy(LazyThreadSafetyMode.NONE) { components.core.client }
+                )),
+            uploadEnabled = telemetryEnabled
+        )
+    }
+
+    @CallSuper
+    open fun setupInAllProcesses() {
+        setupCrashReporting()
+
+        // We want the log messages of all builds to go to Android logcat
+        Log.addSink(AndroidLogSink())
+    }
+
+    @CallSuper
+    open fun setupInMainProcessOnly() {
+        run {
+            // Attention: Do not invoke any code from a-s in this scope.
+            val megazordSetup = setupMegazord()
+
+            setDayNightTheme()
+            enableStrictMode(true)
+            warmBrowsersCache()
+
+            // Make sure the engine is initialized and ready to use.
+            StrictMode.allowThreadDiskReads().resetPoliciesAfter {
+                components.core.engine.warmUp()
+            }
+            initializeWebExtensionSupport()
+
+            // Just to make sure it is impossible for any application-services pieces
+            // to invoke parts of itself that require complete megazord initialization
+            // before that process completes, we wait here, if necessary.
+            if (!megazordSetup.isCompleted) {
+                runBlocking { megazordSetup.await(); }
+            }
+        }
+
+        prefetchForHomeFragment()
         setupLeakCanary()
-        if (Settings.getInstance(this).isTelemetryEnabled) {
-            components.analytics.metrics.start()
-        }
+        startMetricsIfEnabled()
+        setupPush()
+
+        visibilityLifecycleCallback = VisibilityLifecycleCallback(getSystemService())
+        registerActivityLifecycleCallbacks(visibilityLifecycleCallback)
+
+        // Storage maintenance disabled, for now, as it was interfering with background migrations.
+        // See https://github.com/mozilla-mobile/fenix/issues/7227 for context.
+        // if ((System.currentTimeMillis() - settings().lastPlacesStorageMaintenance) > ONE_DAY_MILLIS) {
+        //    runStorageMaintenance()
+        // }
+
+        initVisualCompletenessQueueAndQueueTasks()
     }
 
-    private fun registerRxExceptionHandling() {
-        RxJavaPlugins.setErrorHandler {
-            it.cause?.run {
-                throw this
-            } ?: throw it
+    private fun initVisualCompletenessQueueAndQueueTasks() {
+        val taskQueue = components.performance.visualCompletenessQueue
+
+        fun initQueue() {
+            registerActivityLifecycleCallbacks(PerformanceActivityLifecycleCallbacks(taskQueue))
         }
-    }
 
-    /**
-     * Wait until all experiments are loaded
-     *
-     * This function will cause the caller to block until the experiments are loaded.
-     * It could be used in any number of reasons, but the most likely scenario is that
-     * a calling function needs to access the loaded experiments and wants to
-     * make sure that the experiments are loaded from the server before doing so.
-     *
-     * Because this function is synchronized, it can only be accessed by one thread
-     * at a time. Anyone trying to check the loaded status will wait if someone is
-     * already waiting. This is okay because the thread waiting for access to the
-     * function will immediately see that the loader is complete upon gaining the
-     * opportunity to run the function.
-     */
-    @Synchronized
-    public fun waitForExperimentsToLoad() {
+        fun queueInitExperiments() {
+            if (settings().isExperimentationEnabled) {
+                taskQueue.runIfReadyOrQueue {
+                    Experiments.initialize(
+                        applicationContext = applicationContext,
+                        onExperimentsUpdated = {
+                            ExperimentsManager.initSearchWidgetExperiment(this)
+                        },
+                        configuration = mozilla.components.service.experiments.Configuration(
+                            httpClient = components.core.client,
+                            kintoEndpoint = KINTO_ENDPOINT_PROD
+                        )
+                    )
+                    ExperimentsManager.initSearchWidgetExperiment(this)
+                }
+            } else {
+                // We should make a better way to opt out for when we have more experiments
+                // See https://github.com/mozilla-mobile/fenix/issues/6278
+                ExperimentsManager.optOutSearchWidgetExperiment(this)
+            }
+        }
 
-        // Do we know that we are already complete?
-        if (!experimentLoaderComplete) {
-            // No? Have we completed since the last call?
-            if (!experimentLoader.isCompleted) {
-                // No? Well, let's wait.
-                runBlocking {
-                    experimentLoader.await()
+        fun queueInitStorageAndServices() {
+            components.performance.visualCompletenessQueue.runIfReadyOrQueue {
+                GlobalScope.launch(Dispatchers.IO) {
+                    logger.info("Running post-visual completeness tasks...")
+                    logElapsedTime(logger, "Storage initialization") {
+                        components.core.historyStorage.warmUp()
+                        components.core.bookmarksStorage.warmUp()
+                        components.core.passwordsStorage.warmUp()
+                    }
+                }
+                // Account manager initialization needs to happen on the main thread.
+                GlobalScope.launch(Dispatchers.Main) {
+                    logElapsedTime(logger, "Kicking-off account manager") {
+                        components.backgroundServices.accountManager
+                    }
                 }
             }
-            // Set this so we don't have to wait on the next call.
-            experimentLoaderComplete = true
         }
+
+        fun queueMetrics() {
+            if (SDK_INT >= Build.VERSION_CODES.O) { // required by StorageStatsMetrics.
+                taskQueue.runIfReadyOrQueue {
+                    // Because it may be slow to capture the storage stats, it might be preferred to
+                    // create a WorkManager task for this metric, however, I ran out of
+                    // implementation time and WorkManager is harder to test.
+                    StorageStatsMetrics.report(this.applicationContext)
+                }
+            }
+        }
+
+        initQueue()
+
+        // We init these items in the visual completeness queue to avoid them initing in the critical
+        // startup path, before the UI finishes drawing (i.e. visual completeness).
+        queueInitExperiments()
+        queueInitStorageAndServices()
+        queueMetrics()
+    }
+
+    private fun startMetricsIfEnabled() {
+        if (settings().isTelemetryEnabled) {
+            components.analytics.metrics.start(MetricServiceType.Data)
+        }
+
+        if (settings().isMarketingTelemetryEnabled) {
+            components.analytics.metrics.start(MetricServiceType.Marketing)
+        }
+    }
+
+    // See https://github.com/mozilla-mobile/fenix/issues/7227 for context.
+    // To re-enable this, we need to do so in a way that won't interfere with any startup operations
+    // which acquire reserved+ sqlite lock. Currently, Fennec migrations need to write to storage
+    // on startup, and since they run in a background service we can't simply order these operations.
+    private fun runStorageMaintenance() {
+        GlobalScope.launch(Dispatchers.IO) {
+            // Bookmarks and history storage sit on top of the same db file so we only need to
+            // run maintenance on one - arbitrarily using bookmarks.
+            components.core.bookmarksStorage.runMaintenance()
+        }
+        settings().lastPlacesStorageMaintenance = System.currentTimeMillis()
     }
 
     protected open fun setupLeakCanary() {
         // no-op, LeakCanary is disabled by default
     }
 
-    open fun toggleLeakCanary(newValue: Boolean) {
+    open fun updateLeakCanaryState(isEnabled: Boolean) {
         // no-op, LeakCanary is disabled by default
     }
 
-    private fun setupLogging(megazordEnabled: Boolean) {
-        // We want the log messages of all builds to go to Android logcat
-        Log.addSink(AndroidLogSink())
-
-        if (megazordEnabled) {
-            // We want rust logging to go through the log sinks.
-            // This has to happen after initializing the megazord, and
-            // it's only worth doing in the case that we are a megazord.
-            RustLog.enable()
+    // This is for issue https://github.com/mozilla-mobile/fenix/issues/11660. We prefetch our info for startup
+    // so that we're sure that we have all the data available as our fragment is launched.
+    private fun prefetchForHomeFragment() {
+        StrictMode.allowThreadDiskReads().resetPoliciesAfter {
+            components.core.topSiteStorage.prefetch()
         }
     }
 
-    private fun loadExperiments(): Deferred<Boolean> {
-        return GlobalScope.async(Dispatchers.IO) {
-            val experimentsFile = File(filesDir, EXPERIMENTS_JSON_FILENAME)
-            val experimentSource = KintoExperimentSource(
-                EXPERIMENTS_BASE_URL,
-                EXPERIMENTS_BUCKET_NAME,
-                EXPERIMENTS_COLLECTION_NAME,
-                // TODO Switch back to components.core.client (see https://github.com/mozilla-mobile/fenix/issues/1329)
-                HttpURLConnectionClient()
-            )
-            // TODO add ValueProvider to keep clientID in sync with Glean when ready
-            fretboard = Fretboard(experimentSource, FlatFileExperimentStorage(experimentsFile))
-            fretboard.loadExperiments()
-            Logger.debug("Bucket is ${fretboard.getUserBucket(this@FenixApplication)}")
-            Logger.debug("Experiments active: ${fretboard.getExperimentsMap(this@FenixApplication)}")
-            fretboard.updateExperiments()
-            return@async true
+    private fun setupPush() {
+        // Sets the PushFeature as the singleton instance for push messages to go to.
+        // We need the push feature setup here to deliver messages in the case where the service
+        // starts up the app first.
+        components.push.feature?.let {
+            Logger.info("AutoPushFeature is configured, initializing it...")
+
+            // Install the AutoPush singleton to receive messages.
+            PushProcessor.install(it)
+
+            WebPushEngineIntegration(components.core.engine, it).start()
+
+            // Perform a one-time initialization of the account manager if a message is received.
+            PushFxaIntegration(it, lazy { components.backgroundServices.accountManager }).launch()
+
+            // Initialize the service. This could potentially be done in a coroutine in the future.
+            it.initialize()
         }
     }
 
@@ -157,83 +295,147 @@ open class FenixApplication : Application() {
     /**
      * Initiate Megazord sequence! Megazord Battle Mode!
      *
-     * Mozilla Application Services publishes many native (Rust) code libraries that stand alone: each published Android
-     * ARchive (AAR) contains managed code (classes.jar) and multiple .so library files (one for each supported
-     * architecture). That means consuming multiple such libraries entails at least two .so libraries, and each of those
-     * libraries includes the entire Rust standard library as well as (potentially many) duplicated dependencies. To
-     * save space and allow cross-component native-code Link Time Optimization (LTO, i.e., inlining, dead code
-     * elimination, etc).
-     * Application Services also publishes composite libraries -- so called megazord libraries or just megazords -- that
-     * compose multiple Rust components into a single optimized .so library file.
+     * The application-services combined libraries are known as the "megazord". We use the default `full`
+     * megazord - it contains everything that fenix needs, and (currently) nothing more.
      *
-     * @return Boolean indicating if we're in a megazord.
+     * Documentation on what megazords are, and why they're needed:
+     * - https://github.com/mozilla/application-services/blob/master/docs/design/megazords.md
+     * - https://mozilla.github.io/application-services/docs/applications/consuming-megazord-libraries.html
      */
-    private fun setupMegazord(): Boolean {
-        // mozilla.appservices.FenixMegazord will be missing if we're doing an application-services
-        // dependency substitution locally. That class is supplied dynamically by the org.mozilla.appservices
-        // gradle plugin, and that won't happen if we're not megazording. We won't megazord if we're
-        // locally substituting every module that's part of the megazord's definition, which is what
-        // happens during a local substitution of application-services.
-        // As a workaround, use reflections to conditionally initialize the megazord in case it's present.
-        return try {
-            val megazordClass = Class.forName("mozilla.appservices.FenixMegazord")
-            val megazordInitMethod = megazordClass.getDeclaredMethod("init", Lazy::class.java)
-            val client: Lazy<Client> = lazy { components.core.client }
-            megazordInitMethod.invoke(megazordClass, client)
-            true
-        } catch (e: ClassNotFoundException) {
-            Logger.info("mozilla.appservices.FenixMegazord not found; skipping megazord init.")
-            false
+    private fun setupMegazord(): Deferred<Unit> {
+        // Note: Megazord.init() must be called as soon as possible ...
+        Megazord.init()
+
+        return GlobalScope.async(Dispatchers.IO) {
+            // ... but RustHttpConfig.setClient() and RustLog.enable() can be called later.
+            RustHttpConfig.setClient(lazy { components.core.client })
+            RustLog.enable(components.analytics.crashReporter)
         }
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+
         runOnlyInMainProcess {
-            components.core.sessionManager.onLowMemory()
+            components.core.icons.onTrimMemory(level)
+            components.core.sessionManager.onTrimMemory(level)
         }
     }
 
     @SuppressLint("WrongConstant")
     // Suppressing erroneous lint warning about using MODE_NIGHT_AUTO_BATTERY, a likely library bug
     private fun setDayNightTheme() {
+        val settings = this.settings()
         when {
-            Settings.getInstance(this).shouldUseLightTheme -> {
+            settings.shouldUseLightTheme -> {
                 AppCompatDelegate.setDefaultNightMode(
                     AppCompatDelegate.MODE_NIGHT_NO
                 )
             }
-            Settings.getInstance(this).shouldUseDarkTheme -> {
+            settings.shouldUseDarkTheme -> {
                 AppCompatDelegate.setDefaultNightMode(
                     AppCompatDelegate.MODE_NIGHT_YES
                 )
             }
-            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P &&
-                    Settings.getInstance(this).shouldUseAutoBatteryTheme -> {
+            SDK_INT < Build.VERSION_CODES.P && settings.shouldUseAutoBatteryTheme -> {
                 AppCompatDelegate.setDefaultNightMode(
                     AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY
                 )
             }
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
-                    Settings.getInstance(this).shouldFollowDeviceTheme -> {
+            SDK_INT >= Build.VERSION_CODES.P && settings.shouldFollowDeviceTheme -> {
                 AppCompatDelegate.setDefaultNightMode(
                     AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                 )
             }
             // First run of app no default set, set the default to Follow System for 28+ and Normal Mode otherwise
             else -> {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                if (SDK_INT >= Build.VERSION_CODES.P) {
                     AppCompatDelegate.setDefaultNightMode(
                         AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                     )
-                    Settings.getInstance(this).setFollowDeviceTheme(true)
+                    settings.shouldFollowDeviceTheme = true
                 } else {
                     AppCompatDelegate.setDefaultNightMode(
                         AppCompatDelegate.MODE_NIGHT_NO
                     )
-                    Settings.getInstance(this).setLightTheme(true)
+                    settings.shouldUseLightTheme = true
                 }
             }
         }
     }
+
+    private fun warmBrowsersCache() {
+        // We avoid blocking the main thread for BrowsersCache on startup by loading it on
+        // background thread.
+        GlobalScope.launch(Dispatchers.Default) {
+            BrowsersCache.all(this@FenixApplication)
+        }
+    }
+
+    private fun initializeWebExtensionSupport() {
+        try {
+            GlobalAddonDependencyProvider.initialize(
+                components.addonManager,
+                components.addonUpdater,
+                onCrash = { exception ->
+                    components.analytics.crashReporter.submitCaughtException(exception)
+                }
+            )
+            WebExtensionSupport.initialize(
+                components.core.engine,
+                components.core.store,
+                onNewTabOverride = {
+                    _, engineSession, url ->
+                        val shouldCreatePrivateSession =
+                            components.core.sessionManager.selectedSession?.private
+                                ?: components.settings.openLinksInAPrivateTab
+
+                        val session = Session(url, shouldCreatePrivateSession)
+                        components.core.sessionManager.add(session, true, engineSession)
+                        session.id
+                },
+                onCloseTabOverride = {
+                    _, sessionId -> components.useCases.tabsUseCases.removeTab(sessionId)
+                },
+                onSelectTabOverride = {
+                    _, sessionId ->
+                        val selected = components.core.sessionManager.findSessionById(sessionId)
+                        selected?.let { components.useCases.tabsUseCases.selectTab(it) }
+                },
+                onExtensionsLoaded = { extensions ->
+                    components.addonUpdater.registerForFutureUpdates(extensions)
+                    components.supportedAddonsChecker.registerForChecks()
+                },
+                onUpdatePermissionRequest = components.addonUpdater::onUpdatePermissionRequest
+            )
+        } catch (e: UnsupportedOperationException) {
+            Logger.error("Failed to initialize web extension support", e)
+        }
+    }
+
+    protected fun recordOnInit() {
+        // This gets called by more than one process. Ideally we'd only run this in the main process
+        // but the code to check which process we're in crashes because the Context isn't valid yet.
+        //
+        // This method is not covered by our internal crash reporting: be very careful when modifying it.
+        StartupTimeline.onApplicationInit() // DO NOT MOVE ANYTHING ABOVE HERE: the timing is critical.
+    }
+
+    override fun onConfigurationChanged(config: android.content.res.Configuration) {
+        // Workaround for androidx appcompat issue where follow system day/night mode config changes
+        // are not triggered when also using createConfigurationContext like we do in LocaleManager
+        // https://issuetracker.google.com/issues/143570309#comment3
+        applicationContext.resources.configuration.uiMode = config.uiMode
+
+        // random StrictMode onDiskRead violation even when Fenix is not running in the background.
+        StrictMode.allowThreadDiskReads().resetPoliciesAfter {
+            super.onConfigurationChanged(config)
+        }
+    }
+
+    companion object {
+        private const val KINTO_ENDPOINT_PROD = "https://firefox.settings.services.mozilla.com/v1"
+    }
+
+    override fun getWorkManagerConfiguration() = Builder().setMinimumLoggingLevel(INFO).build()
 }

@@ -1,15 +1,14 @@
-/*
-  This Source Code Form is subject to the terms of the Mozilla Public
-  License, v. 2.0. If a copy of the MPL was not distributed with this
-  file, You can obtain one at http://mozilla.org/MPL/2.0/.
- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.utils
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import mozilla.components.feature.sitepermissions.SitePermissionsRules
+import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.ALLOWED
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.ASK_TO_ALLOW
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.BLOCKED
+import mozilla.components.feature.sitepermissions.SitePermissionsRules.AutoplayAction
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,39 +16,85 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mozilla.fenix.TestApplication
-import org.mozilla.fenix.ext.clearAndCommit
-import org.robolectric.annotation.Config
+import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
+import org.mozilla.fenix.settings.PhoneFeature
+import org.mozilla.fenix.settings.deletebrowsingdata.DeleteBrowsingDataOnQuitType
 
-@RunWith(AndroidJUnit4::class)
-@Config(application = TestApplication::class)
+@RunWith(FenixRobolectricTestRunner::class)
 class SettingsTest {
 
     lateinit var settings: Settings
 
+    private val defaultPermissions = SitePermissionsRules(
+        camera = ASK_TO_ALLOW,
+        location = ASK_TO_ALLOW,
+        microphone = ASK_TO_ALLOW,
+        notification = ASK_TO_ALLOW,
+        autoplayAudible = AutoplayAction.BLOCKED,
+        autoplayInaudible = AutoplayAction.BLOCKED
+    )
+
     @Before
     fun setUp() {
-        settings = Settings.getInstance(testContext)
-            .apply(Settings::clear)
+        settings = Settings(testContext)
     }
 
     @Test
-    fun usePrivateMode() {
+    fun launchLinksInPrivateTab() {
         // When just created
         // Then
-        assertFalse(settings.usePrivateMode)
+        assertFalse(settings.openLinksInAPrivateTab)
 
         // When
-        settings.setPrivateMode(true)
+        settings.openLinksInAPrivateTab = true
 
         // Then
-        assertTrue(settings.usePrivateMode)
+        assertTrue(settings.openLinksInAPrivateTab)
+    }
+
+    @Test
+    fun clearDataOnQuit() {
+        // When just created
+        // Then
+        assertFalse(settings.shouldDeleteBrowsingDataOnQuit)
 
         // When
-        settings.setPrivateMode(false)
+        settings.shouldDeleteBrowsingDataOnQuit = true
 
         // Then
-        assertFalse(settings.usePrivateMode)
+        assertTrue(settings.shouldDeleteBrowsingDataOnQuit)
+
+        // When
+        settings.shouldDeleteBrowsingDataOnQuit = false
+
+        // Then
+        assertFalse(settings.shouldDeleteBrowsingDataOnQuit)
+    }
+
+    @Test
+    fun clearAnyDataOnQuit() {
+        // When just created
+        // Then
+        assertFalse(settings.shouldDeleteAnyDataOnQuit())
+
+        // When
+        settings.setDeleteDataOnQuit(DeleteBrowsingDataOnQuitType.TABS, true)
+
+        // Then
+        assertTrue(settings.shouldDeleteAnyDataOnQuit())
+
+        // When
+        settings.setDeleteDataOnQuit(DeleteBrowsingDataOnQuitType.PERMISSIONS, true)
+
+        // Then
+        assertTrue(settings.shouldDeleteAnyDataOnQuit())
+
+        // When
+        settings.setDeleteDataOnQuit(DeleteBrowsingDataOnQuitType.TABS, false)
+        settings.setDeleteDataOnQuit(DeleteBrowsingDataOnQuitType.PERMISSIONS, false)
+
+        // Then
+        assertFalse(settings.shouldDeleteAnyDataOnQuit())
     }
 
     @Test
@@ -59,32 +104,10 @@ class SettingsTest {
         assertEquals("", settings.defaultSearchEngineName)
 
         // When
-        settings.setDefaultSearchEngineByName("Mozilla")
+        settings.defaultSearchEngineName = "Mozilla"
 
         // Then
         assertEquals("Mozilla", settings.defaultSearchEngineName)
-    }
-
-    @Test
-    fun isCrashReportingEnabled_enabledInBuild() {
-        // When
-        clearExistingInstance()
-        val settings = Settings.getInstance(testContext, isCrashReportEnabledInBuild = true)
-            .apply(Settings::clear)
-
-        // Then
-        assertTrue(settings.isCrashReportingEnabled)
-    }
-
-    @Test
-    fun isCrashReportingEnabled_disabledInBuild() {
-        // When
-        clearExistingInstance()
-        val settings = Settings.getInstance(testContext, isCrashReportEnabledInBuild = false)
-            .apply(Settings::clear)
-
-        // Then
-        assertFalse(settings.isCrashReportingEnabled)
     }
 
     @Test
@@ -102,36 +125,55 @@ class SettingsTest {
     }
 
     @Test
-    fun autoBounceQuickActionSheetCount() {
+    fun showLoginsDialogWarningSync() {
         // When just created
         // Then
-        assertEquals(0, settings.autoBounceQuickActionSheetCount)
+        assertEquals(0, settings.loginsSecureWarningSyncCount)
 
         // When
-        settings.incrementAutomaticBounceQuickActionSheetCount()
-        settings.incrementAutomaticBounceQuickActionSheetCount()
+        settings.incrementShowLoginsSecureWarningSyncCount()
 
         // Then
-        assertEquals(2, settings.autoBounceQuickActionSheetCount)
+        assertEquals(1, settings.loginsSecureWarningSyncCount)
     }
 
     @Test
-    fun shouldAutoBounceQuickActionSheet() {
+    fun shouldShowLoginsDialogWarningSync() {
         // When just created
         // Then
-        assertTrue(settings.shouldAutoBounceQuickActionSheet)
+        assertTrue(settings.shouldShowSecurityPinWarningSync)
 
         // When
-        settings.incrementAutomaticBounceQuickActionSheetCount()
+        settings.incrementShowLoginsSecureWarningSyncCount()
 
         // Then
-        assertTrue(settings.shouldAutoBounceQuickActionSheet)
+        assertFalse(settings.shouldShowSecurityPinWarningSync)
+    }
+
+    @Test
+    fun showLoginsDialogWarning() {
+        // When just created
+        // Then
+        assertEquals(0, settings.loginsSecureWarningCount)
 
         // When
-        settings.incrementAutomaticBounceQuickActionSheetCount()
+        settings.incrementShowLoginsSecureWarningCount()
 
         // Then
-        assertFalse(settings.shouldAutoBounceQuickActionSheet)
+        assertEquals(1, settings.loginsSecureWarningCount)
+    }
+
+    @Test
+    fun shouldShowLoginsDialogWarning() {
+        // When just created
+        // Then
+        assertTrue(settings.shouldShowSecurityPinWarning)
+
+        // When
+        settings.incrementShowLoginsSecureWarningCount()
+
+        // Then
+        assertFalse(settings.shouldShowSecurityPinWarning)
     }
 
     @Test
@@ -141,7 +183,7 @@ class SettingsTest {
         assertFalse(settings.shouldUseLightTheme)
 
         // When
-        settings.setLightTheme(true)
+        settings.shouldUseLightTheme = true
 
         // Then
         assertTrue(settings.shouldUseLightTheme)
@@ -154,10 +196,23 @@ class SettingsTest {
         assertTrue(settings.shouldUseAutoSize)
 
         // When
-        settings.setAutoSize(false)
+        settings.shouldUseAutoSize = false
 
         // Then
         assertFalse(settings.shouldUseAutoSize)
+    }
+
+    @Test
+    fun shouldAutofill() {
+        // When just created
+        // Then
+        assertTrue(settings.shouldAutofillLogins)
+
+        // When
+        settings.shouldAutofillLogins = false
+
+        // Then
+        assertFalse(settings.shouldAutofillLogins)
     }
 
     @Test
@@ -167,17 +222,38 @@ class SettingsTest {
         assertEquals(1f, settings.fontSizeFactor)
 
         // When
-        settings.setFontSizeFactor(2f)
+        settings.fontSizeFactor = 2f
 
         // Then
         assertEquals(2f, settings.fontSizeFactor)
     }
 
     @Test
-    fun shouldShowVisitedSitesBookmarks() {
+    fun shouldShowClipboardSuggestion() {
         // When just created
         // Then
-        assertTrue(settings.shouldShowVisitedSitesBookmarks)
+        assertTrue(settings.shouldShowClipboardSuggestions)
+    }
+
+    @Test
+    fun shouldShowSearchShortcuts() {
+        // When just created
+        // Then
+        assertFalse(settings.shouldShowSearchShortcuts)
+    }
+
+    @Test
+    fun shouldShowHistorySuggestions() {
+        // When just created
+        // Then
+        assertTrue(settings.shouldShowHistorySuggestions)
+    }
+
+    @Test
+    fun shouldShowBookmarkSuggestions() {
+        // When just created
+        // Then
+        assertTrue(settings.shouldShowBookmarkSuggestions)
     }
 
     @Test
@@ -194,7 +270,7 @@ class SettingsTest {
         assertFalse(settings.shouldFollowDeviceTheme)
 
         // When
-        settings.setFollowDeviceTheme(true)
+        settings.shouldFollowDeviceTheme = true
 
         // Then
         assertTrue(settings.shouldFollowDeviceTheme)
@@ -207,10 +283,43 @@ class SettingsTest {
         assertTrue(settings.shouldUseTrackingProtection)
 
         // When
-        settings.setTrackingProtection(false)
+        settings.shouldUseTrackingProtection = false
 
         // Then
         assertFalse(settings.shouldUseTrackingProtection)
+    }
+
+    @Test
+    fun shouldSetOpenInAppOpened() {
+        // When
+        // Then
+        assertFalse(settings.openInAppOpened)
+
+        // When
+        settings.openInAppOpened = true
+
+        // Then
+        assertTrue(settings.openInAppOpened)
+    }
+
+    @Test
+    fun shouldSetInstallPwaOpened() {
+        // When
+        // Then
+        assertFalse(settings.installPwaOpened)
+
+        // When
+        settings.installPwaOpened = true
+
+        // Then
+        assertTrue(settings.installPwaOpened)
+    }
+
+    @Test
+    fun shouldUseTrackingProtectionStrict() {
+        // When
+        // Then
+        assertFalse(settings.useStrictTrackingProtection)
     }
 
     @Test
@@ -224,59 +333,102 @@ class SettingsTest {
     fun showSearchSuggestions() {
         // When just created
         // Then
-        assertTrue(settings.showSearchSuggestions)
+        assertTrue(settings.shouldShowSearchSuggestions)
+    }
+
+    @Test
+    fun showPwaFragment() {
+        // When just created
+        // Then
+        assertFalse(settings.shouldShowPwaOnboarding)
+
+        // When visited once
+        settings.incrementVisitedInstallableCount()
+
+        // Then
+        assertFalse(settings.shouldShowPwaOnboarding)
+
+        // When visited twice
+        settings.incrementVisitedInstallableCount()
+
+        // Then
+        assertFalse(settings.shouldShowPwaOnboarding)
+
+        // When visited thrice
+        settings.incrementVisitedInstallableCount()
+
+        // Then
+        assertTrue(settings.shouldShowPwaOnboarding)
     }
 
     @Test
     fun sitePermissionsPhoneFeatureCameraAction() {
         // When just created
         // Then
-        assertEquals(ASK_TO_ALLOW, settings.getSitePermissionsPhoneFeatureCameraAction())
+        assertEquals(
+            ASK_TO_ALLOW,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.CAMERA)
+        )
 
         // When
-        settings.setSitePermissionsPhoneFeatureCameraAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.CAMERA, BLOCKED)
 
         // Then
-        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureCameraAction())
+        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.CAMERA))
     }
 
     @Test
     fun sitePermissionsPhoneFeatureMicrophoneAction() {
         // When just created
         // Then
-        assertEquals(ASK_TO_ALLOW, settings.getSitePermissionsPhoneFeatureMicrophoneAction())
+        assertEquals(
+            ASK_TO_ALLOW,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.MICROPHONE)
+        )
 
         // When
-        settings.setSitePermissionsPhoneFeatureMicrophoneAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.MICROPHONE, BLOCKED)
 
         // Then
-        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureMicrophoneAction())
+        assertEquals(
+            BLOCKED,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.MICROPHONE)
+        )
     }
 
     @Test
     fun sitePermissionsPhoneFeatureNotificationAction() {
         // When just created
         // Then
-        assertEquals(ASK_TO_ALLOW, settings.getSitePermissionsPhoneFeatureNotificationAction())
+        assertEquals(
+            ASK_TO_ALLOW,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.NOTIFICATION)
+        )
 
         // When
-        settings.setSitePermissionsPhoneFeatureNotificationAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.NOTIFICATION, BLOCKED)
 
         // Then
-        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureNotificationAction())
+        assertEquals(
+            BLOCKED,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.NOTIFICATION)
+        )
     }
 
     @Test
     fun sitePermissionsPhoneFeatureLocation() {
         // When just created
         // Then
-        assertEquals(ASK_TO_ALLOW, settings.getSitePermissionsPhoneFeatureLocation())
+        assertEquals(
+            ASK_TO_ALLOW,
+            settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.LOCATION)
+        )
 
         // When
-        settings.setSitePermissionsPhoneFeatureLocation(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.LOCATION, BLOCKED)
 
         // Then
-        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureLocation())
+        assertEquals(BLOCKED, settings.getSitePermissionsPhoneFeatureAction(PhoneFeature.LOCATION))
     }
 
     @Test
@@ -284,7 +436,7 @@ class SettingsTest {
         // When just created
         // Then
         assertEquals(
-            allAskToAllow(),
+            defaultPermissions,
             settings.getSitePermissionsCustomSettingsRules()
         )
     }
@@ -292,11 +444,11 @@ class SettingsTest {
     @Test
     fun getSitePermissionsCustomSettingsRules_camera() {
         // When
-        settings.setSitePermissionsPhoneFeatureCameraAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.CAMERA, BLOCKED)
 
         // Then
         assertEquals(
-            allAskToAllow().copy(camera = BLOCKED),
+            defaultPermissions.copy(camera = BLOCKED),
             settings.getSitePermissionsCustomSettingsRules()
         )
     }
@@ -304,11 +456,11 @@ class SettingsTest {
     @Test
     fun getSitePermissionsCustomSettingsRules_notification() {
         // When
-        settings.setSitePermissionsPhoneFeatureNotificationAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.NOTIFICATION, BLOCKED)
 
         // Then
         assertEquals(
-            allAskToAllow().copy(notification = BLOCKED),
+            defaultPermissions.copy(notification = BLOCKED),
             settings.getSitePermissionsCustomSettingsRules()
         )
     }
@@ -316,11 +468,11 @@ class SettingsTest {
     @Test
     fun getSitePermissionsCustomSettingsRules_location() {
         // When
-        settings.setSitePermissionsPhoneFeatureLocation(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.LOCATION, BLOCKED)
 
         // Then
         assertEquals(
-            allAskToAllow().copy(location = BLOCKED),
+            defaultPermissions.copy(location = BLOCKED),
             settings.getSitePermissionsCustomSettingsRules()
         )
     }
@@ -328,27 +480,32 @@ class SettingsTest {
     @Test
     fun getSitePermissionsCustomSettingsRules_microphone() {
         // When
-        settings.setSitePermissionsPhoneFeatureMicrophoneAction(BLOCKED)
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.MICROPHONE, BLOCKED)
 
         // Then
         assertEquals(
-            allAskToAllow().copy(microphone = BLOCKED),
+            defaultPermissions.copy(microphone = BLOCKED),
+            settings.getSitePermissionsCustomSettingsRules()
+        )
+    }
+
+    @Test
+    fun getSitePermissionsCustomSettingsRules_autoplayAudible() {
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.AUTOPLAY_AUDIBLE, ALLOWED)
+
+        assertEquals(
+            defaultPermissions.copy(autoplayAudible = ALLOWED),
+            settings.getSitePermissionsCustomSettingsRules()
+        )
+    }
+
+    @Test
+    fun getSitePermissionsCustomSettingsRules_autoplayInaudible() {
+        settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.AUTOPLAY_INAUDIBLE, ALLOWED)
+
+        assertEquals(
+            defaultPermissions.copy(autoplayInaudible = ALLOWED),
             settings.getSitePermissionsCustomSettingsRules()
         )
     }
 }
-
-private fun clearExistingInstance() {
-    Settings.instance = null
-}
-
-private fun Settings.clear() {
-    preferences.clearAndCommit()
-}
-
-private fun allAskToAllow() = SitePermissionsRules(
-    camera = ASK_TO_ALLOW,
-    location = ASK_TO_ALLOW,
-    microphone = ASK_TO_ALLOW,
-    notification = ASK_TO_ALLOW
-)

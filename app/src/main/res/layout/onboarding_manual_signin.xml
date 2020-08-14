@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/onboarding_card"
+    style="@style/OnboardingCardDark"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/header_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:drawablePadding="12dp"
+        android:textAppearance="@style/Header16TextStyle"
+        android:textColor="@color/neutral_text"
+        app:drawableTint="@color/white_color"
+        tools:text="@string/onboarding_firefox_account_header" />
+
+    <Button
+        style="@style/NeutralButton"
+        android:id="@+id/turn_on_sync_button"
+        android:background="@drawable/onboarding_padded_background"
+        android:layout_marginTop="10dp"
+        android:text="@string/onboarding_firefox_account_sign_in"
+        app:backgroundTint="@color/foundation_light_theme" />
+</LinearLayout>

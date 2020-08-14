@@ -1,60 +1,86 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-   License, v. 2.0. If a copy of the MPL was not distributed with this
-   file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.fenix.home.sessioncontrol.viewholders.onboarding
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ImageSpan
 import android.view.View
+import androidx.annotation.DrawableRes
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.onboarding_private_browsing.view.*
 import org.mozilla.fenix.R
+import org.mozilla.fenix.components.metrics.Event
+import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.setBounds
+import org.mozilla.fenix.home.sessioncontrol.OnboardingInteractor
 
-class OnboardingPrivateBrowsingViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+class OnboardingPrivateBrowsingViewHolder(
+    view: View,
+    private val interactor: OnboardingInteractor
+) : RecyclerView.ViewHolder(view) {
 
     init {
-        val iconDrawable = AppCompatResources.getDrawable(view.context, R.drawable.ic_private_browsing)!!
-        iconDrawable.setBounds(0, 0, view.description_text.lineHeight, view.description_text.lineHeight)
+        view.header_text.setOnboardingIcon(R.drawable.ic_onboarding_private_browsing)
 
-        val icon = object : ImageSpan(iconDrawable) {
-            override fun draw(
-                canvas: Canvas,
-                text: CharSequence?,
-                start: Int,
-                end: Int,
-                x: Float,
-                top: Int,
-                y: Int,
-                bottom: Int,
-                paint: Paint
-            ) {
-                canvas.save()
-                val fmPaint = paint.fontMetricsInt
-                val fontHeight = fmPaint.descent - fmPaint.ascent
-                val centerY = y + fmPaint.descent - fontHeight / 2
-                val transY = (centerY - (drawable.bounds.bottom - drawable.bounds.top) / 2).toFloat()
-                canvas.translate(x, transY)
-                drawable.draw(canvas)
-                canvas.restore()
-            }
-        }
-
-        val text = SpannableString(view.context.getString(R.string.onboarding_private_browsing_description))
-        val spanStartIndex = text.indexOf(IMAGE_PLACEHOLDER)
-
-        text.setSpan(
-            icon,
-            spanStartIndex,
-            spanStartIndex + IMAGE_PLACEHOLDER.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        // Display a private browsing icon as a character inside the description text.
+        val inlineIcon = PrivateBrowsingImageSpan(
+            view.context,
+            R.drawable.ic_private_browsing,
+            view.description_text_once.lineHeight
         )
 
-        view.description_text.text = text
+        val text = SpannableString(view.context.getString(R.string.onboarding_private_browsing_description1)).apply {
+            val spanStartIndex = indexOf(IMAGE_PLACEHOLDER)
+            setSpan(
+                    inlineIcon,
+                spanStartIndex,
+                spanStartIndex + IMAGE_PLACEHOLDER.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+
+        view.description_text_once.text = text
+        view.description_text_once.contentDescription = String.format(text.toString(), view.header_text.text)
+        view.open_settings_button.setOnClickListener {
+            it.context.components.analytics.metrics.track(Event.OnboardingPrivateBrowsing)
+            interactor.onOpenSettingsClicked()
+        }
+    }
+
+    class PrivateBrowsingImageSpan(
+        context: Context,
+        @DrawableRes drawableId: Int,
+        size: Int
+    ) : ImageSpan(
+        AppCompatResources.getDrawable(context, drawableId)!!.apply { setBounds(size) }
+    ) {
+        override fun draw(
+            canvas: Canvas,
+            text: CharSequence?,
+            start: Int,
+            end: Int,
+            x: Float,
+            top: Int,
+            y: Int,
+            bottom: Int,
+            paint: Paint
+        ) {
+            canvas.save()
+            val fmPaint = paint.fontMetricsInt
+            val fontHeight = fmPaint.descent - fmPaint.ascent
+            val centerY = y + fmPaint.descent - fontHeight / 2
+            val transY = (centerY - (drawable.bounds.bottom - drawable.bounds.top) / 2).toFloat()
+            canvas.translate(x, transY)
+            drawable.draw(canvas)
+            canvas.restore()
+        }
     }
 
     companion object {

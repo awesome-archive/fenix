@@ -5,62 +5,76 @@
 package org.mozilla.fenix.settings
 
 import android.content.Context
-import android.content.res.TypedArray
-import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.View
 import android.widget.RadioButton
 import android.widget.TextView
-import androidx.core.content.ContextCompat
-import androidx.core.content.res.TypedArrayUtils
+import androidx.core.content.res.TypedArrayUtils.getAttr
+import androidx.core.content.withStyledAttributes
 import androidx.core.text.HtmlCompat
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ThemeManager
-import org.mozilla.fenix.utils.Settings
+import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.utils.view.GroupableRadioButton
+import org.mozilla.fenix.utils.view.uncheckAll
 
-class RadioButtonPreference : Preference {
-    private val radioGroups = mutableListOf<RadioButtonPreference>()
-    private lateinit var summaryView: TextView
-    private lateinit var radioButton: RadioButton
-    var shouldSummaryBeParsedAsHtmlContent: Boolean = true
+@Suppress("RestrictedApi", "PrivateResource")
+open class RadioButtonPreference @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) : Preference(context, attrs), GroupableRadioButton {
+    private val radioGroups = mutableListOf<GroupableRadioButton>()
+    private var summaryView: TextView? = null
+    private var titleView: TextView? = null
+    private var radioButton: RadioButton? = null
+    private var shouldSummaryBeParsedAsHtmlContent: Boolean = true
     private var defaultValue: Boolean = false
     private var clickListener: (() -> Unit)? = null
 
     init {
         layoutResource = R.layout.preference_widget_radiobutton
-    }
 
-    /* In devices with Android 6, when we use android:button="@null" android:drawableStart doesn't work via xml
-     * as a result we have to apply it programmatically. More info about this issue https://github.com/mozilla-mobile/fenix/issues/1414
-    */
-    fun RadioButton.setStartCheckedIndicator() {
-        val attr =
-            ThemeManager.resolveAttribute(android.R.attr.listChoiceIndicatorSingle, context)
-        val buttonDrawable = ContextCompat.getDrawable(context, attr)
-        buttonDrawable.apply {
-            this?.setBounds(0, 0, this.intrinsicWidth, this.intrinsicHeight)
-        }
-        this.setCompoundDrawables(buttonDrawable, null, null, null)
-    }
-
-    constructor(context: Context, attrs: AttributeSet) : super(context, attrs) {
-        val typedArray = context.obtainStyledAttributes(
-            attrs, androidx.preference.R.styleable.Preference, TypedArrayUtils.getAttr(
-                context, androidx.preference.R.attr.preferenceStyle,
+        context.withStyledAttributes(
+            attrs,
+            androidx.preference.R.styleable.Preference,
+            getAttr(
+                context,
+                androidx.preference.R.attr.preferenceStyle,
                 android.R.attr.preferenceStyle
-            ), 0
-        )
-        initDefaultValue(typedArray)
+            ),
+            0
+        ) {
+            defaultValue = when {
+                hasValue(androidx.preference.R.styleable.Preference_defaultValue) ->
+                    getBoolean(androidx.preference.R.styleable.Preference_defaultValue, false)
+                hasValue(androidx.preference.R.styleable.Preference_android_defaultValue) ->
+                    getBoolean(
+                        androidx.preference.R.styleable.Preference_android_defaultValue,
+                        false
+                    )
+                else -> false
+            }
+        }
     }
 
-    fun addToRadioGroup(radioPreference: RadioButtonPreference) {
-        radioGroups.add(radioPreference)
+    override fun addToRadioGroup(radioButton: GroupableRadioButton) {
+        radioGroups.add(radioButton)
     }
 
     fun onClickListener(listener: (() -> Unit)) {
         clickListener = listener
+    }
+
+    override fun setEnabled(enabled: Boolean) {
+        super.setEnabled(enabled)
+        if (!enabled) {
+            summaryView?.alpha = HALF_ALPHA
+            titleView?.alpha = HALF_ALPHA
+        } else {
+            summaryView?.alpha = FULL_ALPHA
+            titleView?.alpha = FULL_ALPHA
+        }
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
@@ -81,59 +95,61 @@ class RadioButtonPreference : Preference {
         }
     }
 
-    private fun updateRadioValue(isChecked: Boolean) {
+    fun setCheckedWithoutClickListener(isChecked: Boolean) {
+        updateRadioValue(isChecked)
+        toggleRadioGroups()
+    }
+
+    override fun updateRadioValue(isChecked: Boolean) {
         persistBoolean(isChecked)
-        radioButton.isChecked = isChecked
-        Settings.getInstance(context).preferences.edit().putBoolean(key, isChecked)
+        radioButton?.isChecked = isChecked
+        context.settings().preferences.edit().putBoolean(key, isChecked)
             .apply()
+        onPreferenceChangeListener?.onPreferenceChange(this, isChecked)
     }
 
     private fun bindRadioButton(holder: PreferenceViewHolder) {
         radioButton = holder.findViewById(R.id.radio_button) as RadioButton
-        radioButton.isChecked = Settings.getInstance(context).preferences.getBoolean(key, false)
-        radioButton.setStartCheckedIndicator()
-    }
-
-    private fun initDefaultValue(typedArray: TypedArray) {
-        if (typedArray.hasValue(androidx.preference.R.styleable.Preference_defaultValue)) {
-            defaultValue = typedArray.getBoolean(
-                androidx.preference.R.styleable.Preference_defaultValue,
-                false
-            )
-        } else if (typedArray.hasValue(androidx.preference.R.styleable.Preference_android_defaultValue)) {
-            defaultValue = typedArray.getBoolean(
-                androidx.preference.R.styleable.Preference_android_defaultValue,
-                false
-            )
-        }
+        radioButton?.isChecked = context.settings().preferences.getBoolean(key, defaultValue)
+        radioButton?.setStartCheckedIndicator()
     }
 
     private fun toggleRadioGroups() {
-        if (radioButton.isChecked) {
-            radioGroups.forEach { it.updateRadioValue(false) }
+        if (radioButton?.isChecked == true) {
+            radioGroups.uncheckAll()
         }
     }
 
     private fun bindTitle(holder: PreferenceViewHolder) {
-        val titleView = holder.findViewById(R.id.title) as TextView
+        titleView = holder.findViewById(R.id.title) as TextView
+        titleView?.alpha = if (isEnabled) FULL_ALPHA else HALF_ALPHA
 
-        if (!TextUtils.isEmpty(title)) {
-            titleView.text = title
+        if (!title.isNullOrEmpty()) {
+            titleView?.text = title
         }
     }
 
     private fun bindSummaryView(holder: PreferenceViewHolder) {
         summaryView = holder.findViewById(R.id.widget_summary) as TextView
-        if (!TextUtils.isEmpty(summary)) {
-            if (shouldSummaryBeParsedAsHtmlContent) {
-                summaryView.text =
+
+        summaryView?.alpha = if (isEnabled) FULL_ALPHA else HALF_ALPHA
+        summaryView?.let {
+            if (!summary.isNullOrEmpty()) {
+                it.text = if (shouldSummaryBeParsedAsHtmlContent) {
                     HtmlCompat.fromHtml(summary.toString(), HtmlCompat.FROM_HTML_MODE_COMPACT)
+                } else {
+                    summary
+                }
+
+                it.visibility = View.VISIBLE
             } else {
-                summaryView.text = summary
+                it.visibility = View.GONE
             }
-            summaryView.visibility = View.VISIBLE
-        } else {
-            summaryView.visibility = View.GONE
         }
+    }
+
+    companion object {
+        const val HALF_ALPHA = 0.5F
+        const val FULL_ALPHA = 1F
     }
 }
